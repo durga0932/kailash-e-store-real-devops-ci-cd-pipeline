@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Wishlist | Kailash E-Store</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #111827;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .header-inner {
+            max-width: 1100px;
+            margin: auto;
+
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .logo span {
+            color: #2563eb;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 45px 20px;
+        }
+
+        .products {
+            display: grid;
+
+            grid-template-columns:
+                repeat(
+                    auto-fit,
+                    minmax(220px, 1fr)
+                );
+
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+
+        .image {
+            height: 230px;
+            background: #f3f4f6;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .placeholder {
+            font-size: 60px;
+        }
+
+        .info {
+            padding: 18px;
+        }
+
+        .name {
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .price {
+            font-size: 18px;
+            font-weight: 800;
+            margin-bottom: 15px;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            border-radius: 7px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .primary {
+            background: #111827;
+            color: white;
+        }
+
+        .remove {
+            border: 1px solid #dc2626;
+            color: #dc2626;
+        }
+
+        .empty {
+            background: white;
+            padding: 70px 20px;
+            text-align: center;
+            border-radius: 12px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<header class="header">
+
+    <div class="header-inner">
+
+        <a href="/" class="logo">
+            Kailash <span>E-Store</span>
+        </a>
+
+        <a href="/cart/">
+            🛒 Cart
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <h1>
+        My Wishlist ❤️
+    </h1>
+
+
+    {% if wishlist_items %}
+
+        <div class="products">
+
+            {% for item in wishlist_items %}
+
+                <div class="card">
+
+                    <div class="image">
+
+                        {% if item.product.image %}
+
+                            <img
+                                src="{{ item.product.image.url }}"
+                                alt="{{ item.product.name }}"
+                            >
+
+                        {% else %}
+
+                            <div class="placeholder">
+                                🛍️
+                            </div>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <div class="info">
+
+                        <div class="name">
+                            {{ item.product.name }}
+                        </div>
+
+                        <div class="price">
+                            ₹{{ item.product.price }}
+                        </div>
+
+
+                        <div class="buttons">
+
+                            <a
+                                href="{% url 'shop:add_to_cart' item.product.id %}"
+                                class="btn primary"
+                            >
+                                Add to Cart
+                            </a>
+
+                            <a
+                                href="{% url 'shop:toggle_wishlist' item.product.id %}"
+                                class="btn remove"
+                            >
+                                Remove
+                            </a>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    {% else %}
+
+        <div class="empty">
+
+            <h2>
+                Your wishlist is empty
+            </h2>
+
+            <p>
+                Save products here for later.
+            </p>
+
+            <br>
+
+            <a href="/">
+                Continue Shopping
+            </a>
+
+        </div>
+
+    {% endif %}
+
+</main>
+
+</body>
+</html>

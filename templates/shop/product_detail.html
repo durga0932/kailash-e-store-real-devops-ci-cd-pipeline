@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>{{ product.name }} | Kailash E-Store</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f7f8fa;
+            color: #111827;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .header-inner {
+            max-width: 1200px;
+            margin: auto;
+            padding: 20px;
+
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .logo span {
+            color: #2563eb;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 50px 20px;
+        }
+
+        .product {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        .image {
+            height: 450px;
+            background: #f3f4f6;
+            border-radius: 12px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            overflow: hidden;
+        }
+
+        .image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .placeholder {
+            font-size: 100px;
+        }
+
+        .category {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 40px;
+            margin: 10px 0 20px;
+        }
+
+        .description {
+            color: #6b7280;
+            line-height: 1.7;
+            margin-bottom: 25px;
+        }
+
+        .price {
+            font-size: 32px;
+            font-weight: 800;
+        }
+
+        .old-price {
+            margin-left: 10px;
+            color: #9ca3af;
+            text-decoration: line-through;
+        }
+
+        .rating {
+            margin: 15px 0;
+        }
+
+        .stock {
+            margin: 15px 0;
+            color: #166534;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 25px;
+        }
+
+        .btn {
+            padding: 13px 20px;
+            border-radius: 8px;
+            font-weight: 700;
+        }
+
+        .primary {
+            background: #111827;
+            color: white;
+        }
+
+        .secondary {
+            border: 1px solid #d1d5db;
+        }
+
+        @media(max-width: 700px) {
+
+            .product {
+                grid-template-columns: 1fr;
+            }
+
+            .image {
+                height: 320px;
+            }
+
+            h1 {
+                font-size: 30px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<header class="header">
+
+    <div class="header-inner">
+
+        <a href="/" class="logo">
+            Kailash <span>E-Store</span>
+        </a>
+
+        <div>
+
+            <a href="/cart/">
+                🛒 Cart
+            </a>
+
+            &nbsp;&nbsp;
+
+            {% if user.is_authenticated %}
+
+                <a href="/dashboard/">
+                    Account
+                </a>
+
+            {% else %}
+
+                <a href="/accounts/login/">
+                    Login
+                </a>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <div class="product">
+
+        <div class="image">
+
+            {% if product.image %}
+
+                <img
+                    src="{{ product.image.url }}"
+                    alt="{{ product.name }}"
+                >
+
+            {% else %}
+
+                <div class="placeholder">
+                    🛍️
+                </div>
+
+            {% endif %}
+
+        </div>
+
+
+        <div>
+
+            <div class="category">
+                {{ product.category.name }}
+            </div>
+
+            <h1>
+                {{ product.name }}
+            </h1>
+
+            <div class="rating">
+                ⭐ {{ product.rating }}
+                ({{ product.review_count }} reviews)
+            </div>
+
+            <div class="description">
+
+                {{ product.description }}
+
+            </div>
+
+            <div>
+
+                <span class="price">
+                    ₹{{ product.price }}
+                </span>
+
+                {% if product.compare_at_price %}
+
+                    <span class="old-price">
+                        ₹{{ product.compare_at_price }}
+                    </span>
+
+                {% endif %}
+
+            </div>
+
+
+            <div class="stock">
+
+                {% if product.stock > 0 %}
+
+                    ✓ {{ product.stock }} available
+
+                {% else %}
+
+                    Out of stock
+
+                {% endif %}
+
+            </div>
+
+
+            <div class="buttons">
+
+                {% if product.stock > 0 %}
+
+                    <a
+                        href="{% url 'shop:add_to_cart' product.id %}"
+                        class="btn primary"
+                    >
+                        Add to Cart
+                    </a>
+
+                {% endif %}
+
+
+                {% if user.is_authenticated %}
+
+                    <a
+                        href="{% url 'shop:toggle_wishlist' product.id %}"
+                        class="btn secondary"
+                    >
+                        ♡ Wishlist
+                    </a>
+
+                {% else %}
+
+                    <a
+                        href="{% url 'accounts:login' %}"
+                        class="btn secondary"
+                    >
+                        Login for Wishlist
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+</main>
+
+</body>
+</html>

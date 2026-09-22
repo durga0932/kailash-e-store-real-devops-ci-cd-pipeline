@@ -1,0 +1,971 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Kailash E-Store</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+
+            background: #f7f8fa;
+            color: #111827;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        /* HEADER */
+
+        .header {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-inner {
+            max-width: 1200px;
+            margin: auto;
+            min-height: 72px;
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            gap: 25px;
+            padding: 12px 20px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: #111827;
+            white-space: nowrap;
+        }
+
+        .logo span {
+            color: #2563eb;
+        }
+
+        .search {
+            flex: 1;
+            max-width: 500px;
+        }
+
+        .search form {
+            display: flex;
+        }
+
+        .search input {
+            width: 100%;
+            height: 42px;
+            padding: 0 15px;
+
+            border: 1px solid #d1d5db;
+            border-radius: 8px 0 0 8px;
+
+            outline: none;
+            font-size: 14px;
+        }
+
+        .search button {
+            width: 50px;
+            border: none;
+            border-radius: 0 8px 8px 0;
+
+            background: #111827;
+            color: white;
+
+            cursor: pointer;
+        }
+
+        .nav {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .nav a:hover {
+            color: #2563eb;
+        }
+
+        .cart {
+            position: relative;
+        }
+
+        .cart-count {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+
+            background: #ef4444;
+            color: white;
+
+            min-width: 18px;
+            height: 18px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 50%;
+
+            font-size: 11px;
+        }
+
+        /* HERO */
+
+        .hero {
+            background:
+                linear-gradient(
+                    135deg,
+                    #111827,
+                    #2563eb
+                );
+
+            color: white;
+        }
+
+        .hero-inner {
+            max-width: 1200px;
+            margin: auto;
+
+            min-height: 400px;
+
+            display: flex;
+            align-items: center;
+
+            padding: 60px 20px;
+        }
+
+        .hero-content {
+            max-width: 650px;
+        }
+
+        .hero-badge {
+            display: inline-block;
+
+            padding: 8px 14px;
+
+            background: rgba(255,255,255,.15);
+
+            border-radius: 30px;
+
+            font-size: 13px;
+            margin-bottom: 18px;
+        }
+
+        .hero h1 {
+            font-size: clamp(38px, 6vw, 68px);
+            line-height: 1.05;
+
+            margin-bottom: 20px;
+        }
+
+        .hero p {
+            font-size: 18px;
+            line-height: 1.7;
+
+            color: #e5e7eb;
+
+            margin-bottom: 30px;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-block;
+
+            padding: 13px 22px;
+
+            border-radius: 8px;
+
+            font-weight: 700;
+        }
+
+        .btn-primary {
+            background: white;
+            color: #111827;
+        }
+
+        .btn-secondary {
+            border: 1px solid rgba(255,255,255,.5);
+            color: white;
+        }
+
+        /* CONTENT */
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 50px 20px;
+        }
+
+        .section-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            margin-bottom: 25px;
+        }
+
+        .section-heading h2 {
+            font-size: 28px;
+        }
+
+        .section-heading a {
+            color: #2563eb;
+            font-weight: 600;
+        }
+
+        /* CATEGORIES */
+
+        .categories {
+            display: grid;
+
+            grid-template-columns:
+                repeat(
+                    auto-fit,
+                    minmax(140px, 1fr)
+                );
+
+            gap: 15px;
+        }
+
+        .category {
+            background: white;
+
+            border: 1px solid #e5e7eb;
+
+            border-radius: 12px;
+
+            padding: 22px;
+
+            text-align: center;
+
+            transition: .2s;
+        }
+
+        .category:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,.08);
+        }
+
+        .category-icon {
+            font-size: 35px;
+            margin-bottom: 10px;
+        }
+
+        .category h3 {
+            font-size: 15px;
+        }
+
+        /* PRODUCTS */
+
+        .products {
+            display: grid;
+
+            grid-template-columns:
+                repeat(
+                    auto-fit,
+                    minmax(220px, 1fr)
+                );
+
+            gap: 20px;
+        }
+
+        .product-card {
+            background: white;
+
+            border: 1px solid #e5e7eb;
+
+            border-radius: 12px;
+
+            overflow: hidden;
+
+            transition: .2s;
+        }
+
+        .product-card:hover {
+            transform: translateY(-4px);
+
+            box-shadow:
+                0 12px 30px
+                rgba(0,0,0,.08);
+        }
+
+        .product-image {
+            height: 220px;
+
+            background: #f3f4f6;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            overflow: hidden;
+        }
+
+        .product-image img {
+            width: 100%;
+            height: 100%;
+
+            object-fit: cover;
+        }
+
+        .product-placeholder {
+            font-size: 55px;
+        }
+
+        .product-info {
+            padding: 18px;
+        }
+
+        .product-category {
+            font-size: 12px;
+            color: #6b7280;
+
+            margin-bottom: 7px;
+        }
+
+        .product-name {
+            font-size: 17px;
+            font-weight: 700;
+
+            margin-bottom: 8px;
+        }
+
+        .product-description {
+            color: #6b7280;
+            font-size: 13px;
+
+            line-height: 1.5;
+
+            margin-bottom: 12px;
+        }
+
+        .product-price {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+
+            margin-bottom: 15px;
+        }
+
+        .price {
+            font-size: 19px;
+            font-weight: 800;
+        }
+
+        .old-price {
+            color: #9ca3af;
+            text-decoration: line-through;
+            font-size: 14px;
+        }
+
+        .discount {
+            background: #dcfce7;
+            color: #166534;
+
+            padding: 4px 7px;
+
+            border-radius: 5px;
+
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .product-button {
+            display: block;
+
+            text-align: center;
+
+            background: #111827;
+            color: white;
+
+            padding: 11px;
+
+            border-radius: 7px;
+
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        /* EMPTY */
+
+        .empty {
+            background: white;
+
+            padding: 50px;
+
+            border-radius: 12px;
+
+            text-align: center;
+
+            border: 1px solid #e5e7eb;
+
+            color: #6b7280;
+        }
+
+        /* FOOTER */
+
+        footer {
+            background: #111827;
+            color: #d1d5db;
+
+            margin-top: 30px;
+        }
+
+        .footer-inner {
+            max-width: 1200px;
+            margin: auto;
+
+            padding: 50px 20px;
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(
+                    auto-fit,
+                    minmax(200px, 1fr)
+                );
+
+            gap: 30px;
+        }
+
+        .footer-column h3 {
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .footer-column p,
+        .footer-column a {
+            font-size: 14px;
+            line-height: 1.9;
+        }
+
+        .copyright {
+            text-align: center;
+
+            border-top: 1px solid #374151;
+
+            padding: 18px;
+
+            font-size: 13px;
+        }
+
+        /* MOBILE */
+
+        @media (max-width: 768px) {
+
+            .header-inner {
+                flex-wrap: wrap;
+            }
+
+            .search {
+                order: 3;
+                flex-basis: 100%;
+                max-width: none;
+            }
+
+            .nav {
+                gap: 10px;
+            }
+
+            .hero-inner {
+                min-height: 350px;
+                padding: 45px 20px;
+            }
+
+            .hero p {
+                font-size: 16px;
+            }
+
+            .products {
+                grid-template-columns:
+                    repeat(2, 1fr);
+
+                gap: 12px;
+            }
+
+            .product-image {
+                height: 170px;
+            }
+
+            .product-info {
+                padding: 13px;
+            }
+
+            .product-name {
+                font-size: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+
+            .logo {
+                font-size: 20px;
+            }
+
+            .nav a:nth-child(2) {
+                display: none;
+            }
+
+            .hero h1 {
+                font-size: 38px;
+            }
+
+            .products {
+                grid-template-columns: 1fr;
+            }
+
+            .product-image {
+                height: 230px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+
+<!-- HEADER -->
+
+<header class="header">
+
+    <div class="header-inner">
+
+        <a
+            href="/"
+            class="logo"
+        >
+            Kailash <span>E-Store</span>
+        </a>
+
+
+        <div class="search">
+
+            <form method="get">
+
+                <input
+                    type="search"
+                    name="q"
+                    placeholder="Search products..."
+                    value="{{ request.GET.q }}"
+                >
+
+                <button type="submit">
+                    🔍
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <nav class="nav">
+
+            {% if user.is_authenticated %}
+
+                <a href="/dashboard/">
+                    Account
+                </a>
+
+                <a href="/accounts/logout/">
+                    Logout
+                </a>
+
+            {% else %}
+
+                <a href="/accounts/login/">
+                    Login
+                </a>
+
+                <a href="/accounts/signup/">
+                    Sign Up
+                </a>
+
+            {% endif %}
+
+
+            <a
+                href="/cart/"
+                class="cart"
+            >
+                🛒 Cart
+
+                {% if cart_count %}
+                    <span class="cart-count">
+                        {{ cart_count }}
+                    </span>
+                {% endif %}
+
+            </a>
+
+        </nav>
+
+    </div>
+
+</header>
+
+
+<!-- HERO -->
+
+<section class="hero">
+
+    <div class="hero-inner">
+
+        <div class="hero-content">
+
+            <span class="hero-badge">
+                ✨ New Collection Available
+            </span>
+
+            <h1>
+                Shop Smarter.<br>
+                Live Better.
+            </h1>
+
+            <p>
+                Discover quality products, exclusive
+                offers and a simple shopping experience
+                at Kailash E-Store.
+            </p>
+
+            <div class="hero-buttons">
+
+                <a
+                    href="#products"
+                    class="btn btn-primary"
+                >
+                    Shop Now
+                </a>
+
+                <a
+                    href="#categories"
+                    class="btn btn-secondary"
+                >
+                    Explore Categories
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- CATEGORIES -->
+
+<section
+    class="container"
+    id="categories"
+>
+
+    <div class="section-heading">
+
+        <h2>
+            Shop by Category
+        </h2>
+
+    </div>
+
+
+    {% if categories %}
+
+        <div class="categories">
+
+            {% for category in categories %}
+
+                <a
+                    href="?category={{ category.slug }}"
+                    class="category"
+                >
+
+                    <div class="category-icon">
+                        {{ category.icon }}
+                    </div>
+
+                    <h3>
+                        {{ category.name }}
+                    </h3>
+
+                </a>
+
+            {% endfor %}
+
+        </div>
+
+    {% else %}
+
+        <div class="empty">
+
+            <h3>
+                No categories available
+            </h3>
+
+            <p>
+                Add categories from Django Admin.
+            </p>
+
+        </div>
+
+    {% endif %}
+
+</section>
+
+
+<!-- PRODUCTS -->
+
+<section
+    class="container"
+    id="products"
+>
+
+    <div class="section-heading">
+
+        <h2>
+            Featured Products
+        </h2>
+
+    </div>
+
+
+    {% if products %}
+
+        <div class="products">
+
+            {% for product in products %}
+
+                <article class="product-card">
+
+                    <div class="product-image">
+
+                        {% if product.image %}
+
+                            <img
+                                src="{{ product.image.url }}"
+                                alt="{{ product.name }}"
+                            >
+
+                        {% else %}
+
+                            <div class="product-placeholder">
+                                🛍️
+                            </div>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <div class="product-info">
+
+                        <div class="product-category">
+                            {{ product.category.name }}
+                        </div>
+
+
+                        <div class="product-name">
+
+                            {{ product.name }}
+
+                        </div>
+
+
+                        {% if product.short_description %}
+
+                            <div class="product-description">
+
+                                {{ product.short_description }}
+
+                            </div>
+
+                        {% endif %}
+
+
+                        <div class="product-price">
+
+                            <span class="price">
+
+                                ₹{{ product.price }}
+
+                            </span>
+
+
+                            {% if product.compare_at_price %}
+
+                                <span class="old-price">
+
+                                    ₹{{ product.compare_at_price }}
+
+                                </span>
+
+                            {% endif %}
+
+
+                            {% if product.discount_percent %}
+
+                                <span class="discount">
+
+                                    {{ product.discount_percent }}% OFF
+
+                                </span>
+
+                            {% endif %}
+
+                        </div>
+
+
+                        <a
+                            href="{{ product.get_absolute_url }}"
+                            class="product-button"
+                        >
+                            View Product
+                        </a>
+
+                    </div>
+
+                </article>
+
+            {% endfor %}
+
+        </div>
+
+    {% else %}
+
+        <div class="empty">
+
+            <h3>
+                No products available
+            </h3>
+
+            <p>
+                Add products from Django Admin
+                or run the demo data command.
+            </p>
+
+        </div>
+
+    {% endif %}
+
+</section>
+
+
+<!-- FOOTER -->
+
+<footer>
+
+    <div class="footer-inner">
+
+        <div class="footer-column">
+
+            <h3>
+                Kailash E-Store
+            </h3>
+
+            <p>
+                Your modern online shopping
+                destination.
+            </p>
+
+        </div>
+
+
+        <div class="footer-column">
+
+            <h3>
+                Quick Links
+            </h3>
+
+            <p>
+                <a href="/">
+                    Home
+                </a>
+            </p>
+
+            <p>
+                <a href="/accounts/login/">
+                    Login
+                </a>
+            </p>
+
+            <p>
+                <a href="/accounts/signup/">
+                    Create Account
+                </a>
+            </p>
+
+        </div>
+
+
+        <div class="footer-column">
+
+            <h3>
+                Customer Support
+            </h3>
+
+            <p>
+                Contact Us
+            </p>
+
+            <p>
+                Shipping Information
+            </p>
+
+            <p>
+                Returns & Refunds
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="copyright">
+
+        © 2026 Kailash E-Store.
+        All rights reserved.
+
+    </div>
+
+</footer>
+
+
+</body>
+</html>

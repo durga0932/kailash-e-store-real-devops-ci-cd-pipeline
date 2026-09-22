@@ -1,0 +1,923 @@
+
+{% load static %}
+{% load socialaccount %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Login | Kailash E-Store</title>
+
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+
+        body {
+            margin: 0;
+
+            min-height: 100vh;
+
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #f8fafc,
+                    #eef2ff
+                );
+
+            color: #111827;
+        }
+
+
+        .page {
+            min-height: 100vh;
+
+            display: grid;
+
+            grid-template-columns:
+                1fr 1fr;
+        }
+
+
+        /* =========================
+           LEFT SIDE
+        ========================= */
+
+        .brand-panel {
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #111827,
+                    #1d4ed8
+                );
+
+            color: white;
+
+            padding: 60px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+        }
+
+
+        .brand-content {
+            max-width: 520px;
+        }
+
+
+        .brand-logo {
+
+            font-size: 32px;
+
+            font-weight: 800;
+
+            margin-bottom: 25px;
+        }
+
+
+        .brand-logo span {
+            color: #93c5fd;
+        }
+
+
+        .brand-content h2 {
+
+            font-size:
+                clamp(
+                    38px,
+                    5vw,
+                    64px
+                );
+
+            line-height: 1.05;
+
+            margin: 0 0 25px;
+        }
+
+
+        .brand-content p {
+
+            font-size: 17px;
+
+            line-height: 1.8;
+
+            color: #dbeafe;
+
+            margin-bottom: 30px;
+        }
+
+
+        .features {
+
+            display: grid;
+
+            gap: 15px;
+        }
+
+
+        .feature {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 12px;
+
+            font-size: 15px;
+        }
+
+
+        .feature-icon {
+
+            width: 35px;
+
+            height: 35px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            background:
+                rgba(
+                    255,
+                    255,
+                    255,
+                    .12
+                );
+
+            border-radius: 50%;
+        }
+
+
+        /* =========================
+           RIGHT SIDE
+        ========================= */
+
+        .login-panel {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            padding: 30px;
+        }
+
+
+        .login-card {
+
+            width: 100%;
+
+            max-width: 460px;
+
+            background: white;
+
+            padding: 38px;
+
+            border-radius: 20px;
+
+            box-shadow:
+                0 20px 60px
+                rgba(
+                    15,
+                    23,
+                    42,
+                    .10
+                );
+        }
+
+
+        .mobile-logo {
+
+            display: none;
+
+            text-align: center;
+
+            font-size: 26px;
+
+            font-weight: 800;
+
+            margin-bottom: 20px;
+        }
+
+
+        .mobile-logo span {
+            color: #2563eb;
+        }
+
+
+        .login-card h1 {
+
+            margin: 0 0 8px;
+
+            font-size: 30px;
+        }
+
+
+        .subtitle {
+
+            color: #6b7280;
+
+            font-size: 14px;
+
+            margin-bottom: 25px;
+        }
+
+
+        /* =========================
+           SOCIAL LOGIN
+        ========================= */
+
+        .social-title {
+
+            text-align: center;
+
+            font-size: 13px;
+
+            font-weight: 600;
+
+            color: #6b7280;
+
+            margin-bottom: 12px;
+        }
+
+
+        .social-grid {
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(
+                    2,
+                    1fr
+                );
+
+            gap: 10px;
+
+            margin-bottom: 22px;
+        }
+
+
+        .social-btn {
+
+            min-height: 48px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            gap: 9px;
+
+            padding: 10px;
+
+            background: white;
+
+            border: 1px solid #d1d5db;
+
+            border-radius: 9px;
+
+            color: #111827;
+
+            text-decoration: none;
+
+            font-size: 13px;
+
+            font-weight: 700;
+
+            transition:
+                .2s ease;
+        }
+
+
+        .social-btn:hover {
+
+            border-color: #2563eb;
+
+            background: #f8fafc;
+
+            transform:
+                translateY(-1px);
+        }
+
+
+        .social-icon {
+
+            font-size: 18px;
+        }
+
+
+        /* =========================
+           DIVIDER
+        ========================= */
+
+        .divider {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 12px;
+
+            margin: 22px 0;
+
+            color: #9ca3af;
+
+            font-size: 12px;
+
+            font-weight: 600;
+        }
+
+
+        .divider::before,
+        .divider::after {
+
+            content: "";
+
+            height: 1px;
+
+            background: #e5e7eb;
+
+            flex: 1;
+        }
+
+
+        /* =========================
+           FORM
+        ========================= */
+
+        form p {
+
+            margin:
+                0 0 17px;
+        }
+
+
+        label {
+
+            display: block;
+
+            margin-bottom: 7px;
+
+            font-size: 14px;
+
+            font-weight: 600;
+
+            color: #374151;
+        }
+
+
+        input {
+
+            width: 100%;
+
+            padding: 13px 14px;
+
+            border:
+                1px solid #d1d5db;
+
+            border-radius: 8px;
+
+            outline: none;
+
+            font-size: 15px;
+
+            transition:
+                border-color .2s,
+                box-shadow .2s;
+        }
+
+
+        input:focus {
+
+            border-color: #2563eb;
+
+            box-shadow:
+                0 0 0 3px
+                rgba(
+                    37,
+                    99,
+                    235,
+                    .10
+                );
+        }
+
+
+        .field-error {
+
+            color: #dc2626;
+
+            font-size: 12px;
+
+            margin-top: 5px;
+        }
+
+
+        .login-button {
+
+            width: 100%;
+
+            padding: 14px;
+
+            margin-top: 5px;
+
+            border: none;
+
+            border-radius: 9px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #111827,
+                    #2563eb
+                );
+
+            color: white;
+
+            font-size: 16px;
+
+            font-weight: 700;
+
+            cursor: pointer;
+
+            transition: .2s;
+        }
+
+
+        .login-button:hover {
+
+            transform:
+                translateY(-1px);
+
+            box-shadow:
+                0 8px 20px
+                rgba(
+                    37,
+                    99,
+                    235,
+                    .20
+                );
+        }
+
+
+        /* =========================
+           ERROR
+        ========================= */
+
+        .error-box {
+
+            background: #fef2f2;
+
+            color: #b91c1c;
+
+            border:
+                1px solid #fecaca;
+
+            border-radius: 8px;
+
+            padding: 11px 13px;
+
+            margin-bottom: 17px;
+
+            font-size: 13px;
+        }
+
+
+        /* =========================
+           SIGNUP
+        ========================= */
+
+        .signup-link {
+
+            text-align: center;
+
+            margin-top: 23px;
+
+            padding-top: 20px;
+
+            border-top:
+                1px solid #e5e7eb;
+
+            color: #6b7280;
+
+            font-size: 14px;
+        }
+
+
+        .signup-link a {
+
+            color: #2563eb;
+
+            font-weight: 700;
+
+            text-decoration: none;
+        }
+
+
+        .signup-link a:hover {
+            text-decoration: underline;
+        }
+
+
+        .back-home {
+
+            text-align: center;
+
+            margin-top: 15px;
+
+            font-size: 13px;
+        }
+
+
+        .back-home a {
+
+            color: #6b7280;
+
+            text-decoration: none;
+        }
+
+
+        .back-home a:hover {
+            color: #2563eb;
+        }
+
+
+        /* =========================
+           RESPONSIVE
+        ========================= */
+
+        @media (max-width: 900px) {
+
+            .page {
+                grid-template-columns: 1fr;
+            }
+
+
+            .brand-panel {
+                display: none;
+            }
+
+
+            .mobile-logo {
+                display: block;
+            }
+
+
+            .login-panel {
+                min-height: 100vh;
+
+                padding: 20px;
+            }
+
+        }
+
+
+        @media (max-width: 480px) {
+
+            .login-card {
+                padding: 25px 20px;
+
+                border-radius: 14px;
+            }
+
+
+            .social-grid {
+
+                grid-template-columns:
+                    1fr;
+            }
+
+
+            .login-card h1 {
+                font-size: 26px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<div class="page">
+
+
+    <!-- ==========================================
+         LEFT BRAND PANEL
+    =========================================== -->
+
+    <section class="brand-panel">
+
+        <div class="brand-content">
+
+            <div class="brand-logo">
+
+                Kailash
+                <span>E-Store</span>
+
+            </div>
+
+
+            <h2>
+                Shop smarter.
+                Live better.
+            </h2>
+
+
+            <p>
+                Discover quality products,
+                exclusive offers and a
+                seamless shopping experience
+                with Kailash E-Store.
+            </p>
+
+
+            <div class="features">
+
+                <div class="feature">
+
+                    <div class="feature-icon">
+                        ✓
+                    </div>
+
+                    Secure Shopping
+
+                </div>
+
+
+                <div class="feature">
+
+                    <div class="feature-icon">
+                        ⚡
+                    </div>
+
+                    Fast Checkout
+
+                </div>
+
+
+                <div class="feature">
+
+                    <div class="feature-icon">
+                        🛍
+                    </div>
+
+                    Quality Products
+
+                </div>
+
+
+                <div class="feature">
+
+                    <div class="feature-icon">
+                        🔒
+                    </div>
+
+                    Protected Account
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- ==========================================
+         LOGIN PANEL
+    =========================================== -->
+
+    <section class="login-panel">
+
+
+        <div class="login-card">
+
+
+            <div class="mobile-logo">
+
+                Kailash
+                <span>E-Store</span>
+
+            </div>
+
+
+            <h1>
+                Welcome Back
+            </h1>
+
+
+            <div class="subtitle">
+
+                Login to your Kailash E-Store account
+
+            </div>
+
+
+            <!-- ==================================
+                 SOCIAL LOGIN
+            =================================== -->
+
+            <div class="social-title">
+
+                Continue with
+
+            </div>
+
+
+            <div class="social-grid">
+
+
+                <!-- GOOGLE -->
+
+                <!-- GOOGLE -->
+                <a href="{% provider_login_url 'google' %}" class="social-btn">
+
+                    <span class="social-icon">
+                        <img src="{% static 'images/gg.PNG' %}" alt="Google" style="width: 30px;">
+                    </span>
+
+                    <span>Google</span>
+
+                </a>
+
+                  <!-- APPLE -->
+                <a href="" class="social-btn">
+
+                    <span class="social-icon">
+                        <img src="{% static 'images/apple.png' %}" alt="Apple"  style="width: 30px;">
+                    </span> 
+
+                </a>
+
+                 <!-- GITLAB -->
+                <a href="" class="social-btn">
+                    <span class="social-icon">
+                        <img src="{% static 'images/gitlab.png' %}" alt="GitLab"  style="width: 30px;">
+                    </span>
+                   
+                </a>
+
+                <!-- FACEBOOK -->
+                <a href="" class="social-btn">
+                    <span class="social-icon">
+                        <img src="{% static 'images/facebook.png' %}" alt="Facebook"  style="width: 80px;">
+                    </span>
+                   
+                </a>
+
+
+            </div>
+
+
+            <!-- DIVIDER -->
+
+            <div class="divider">
+
+                OR
+
+            </div>
+
+
+            <!-- ==================================
+                 EMAIL LOGIN
+            =================================== -->
+
+
+            {% if form.non_field_errors %}
+
+                <div class="error-box">
+
+                    {{ form.non_field_errors }}
+
+                </div>
+
+            {% elif form.errors %}
+
+                <div class="error-box">
+
+                    Invalid email or password.
+
+                </div>
+
+            {% endif %}
+
+
+            <form
+                method="post"
+                action="{% url 'accounts:login' %}"
+            >
+
+                {% csrf_token %}
+
+
+                {% for field in form %}
+
+                    <p>
+
+                        {{ field.label_tag }}
+
+                        {{ field }}
+
+                        {% if field.errors %}
+
+                            <span class="field-error">
+
+                                {{ field.errors|striptags }}
+
+                            </span>
+
+                        {% endif %}
+
+                    </p>
+
+                {% endfor %}
+
+
+                <input
+                    type="hidden"
+                    name="next"
+                    value="{{ next }}"
+                >
+
+
+                <button
+                    type="submit"
+                    class="login-button"
+                >
+
+                    Login to Account
+
+                </button>
+
+
+            </form>
+
+
+            <!-- SIGNUP -->
+
+            <div class="signup-link">
+
+                Don't have an account?
+
+                <a
+                    href="{% url 'accounts:signup' %}"
+                >
+                    Create Account
+                </a>
+
+            </div>
+
+
+            <!-- HOME -->
+
+            <div class="back-home">
+
+                <a href="/">
+
+                    ← Back to Store
+
+                </a>
+
+            </div>
+
+
+        </div>
+
+    </section>
+
+
+</div>
+
+
+</body>
+
+</html>

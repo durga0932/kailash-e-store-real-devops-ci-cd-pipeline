@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>My Account | Kailash E-Store</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #111827;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .header-inner {
+            max-width: 1100px;
+            margin: auto;
+            padding: 20px;
+
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .logo span {
+            color: #2563eb;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 45px 20px;
+        }
+
+        .welcome {
+            background: #111827;
+            color: white;
+
+            padding: 30px;
+            border-radius: 14px;
+
+            margin-bottom: 25px;
+        }
+
+        .welcome h1 {
+            margin-top: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+
+        .box {
+            background: white;
+            padding: 25px;
+            border-radius: 14px;
+        }
+
+        .box h2 {
+            margin-top: 0;
+        }
+
+        .order {
+            padding: 15px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .order:last-child {
+            border-bottom: 0;
+        }
+
+        .order-number {
+            font-weight: 700;
+        }
+
+        .status {
+            display: inline-block;
+
+            margin-top: 8px;
+
+            padding: 5px 9px;
+
+            background: #dcfce7;
+            color: #166534;
+
+            border-radius: 5px;
+
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .wishlist-item {
+            display: flex;
+            justify-content: space-between;
+
+            padding: 12px 0;
+
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .wishlist-item:last-child {
+            border-bottom: 0;
+        }
+
+        .logout {
+            color: #dc2626;
+        }
+
+        @media(max-width: 750px) {
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<header class="header">
+
+    <div class="header-inner">
+
+        <a href="/" class="logo">
+            Kailash <span>E-Store</span>
+        </a>
+
+        <a
+            href="/accounts/logout/"
+            class="logout"
+        >
+            Logout
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <section class="welcome">
+
+        <h1>
+            Hello,
+            {{ user.first_name|default:user.username }} 👋
+        </h1>
+
+        <p>
+            Welcome to your Kailash E-Store dashboard.
+        </p>
+
+    </section>
+
+
+    <div class="grid">
+
+
+        <section class="box">
+
+            <h2>
+                My Orders
+            </h2>
+
+
+            {% if orders %}
+
+                {% for order in orders %}
+
+                    <div class="order">
+
+                        <div class="order-number">
+
+                            {{ order.order_number }}
+
+                        </div>
+
+                        <div>
+
+                            ₹{{ order.total }}
+
+                        </div>
+
+                        <span class="status">
+
+                            {{ order.status }}
+
+                        </span>
+
+                    </div>
+
+                {% endfor %}
+
+            {% else %}
+
+                <p>
+                    You haven't placed any orders yet.
+                </p>
+
+                <a href="/">
+                    Start Shopping
+                </a>
+
+            {% endif %}
+
+        </section>
+
+
+        <section class="box">
+
+            <h2>
+                My Wishlist
+            </h2>
+
+
+            {% if wishlist_items %}
+
+                {% for item in wishlist_items %}
+
+                    <div class="wishlist-item">
+
+                        <span>
+                            {{ item.product.name }}
+                        </span>
+
+                        <strong>
+                            ₹{{ item.product.price }}
+                        </strong>
+
+                    </div>
+
+                {% endfor %}
+
+            {% else %}
+
+                <p>
+                    Your wishlist is empty.
+                </p>
+
+                <a href="/">
+                    Browse Products
+                </a>
+
+            {% endif %}
+
+        </section>
+
+    </div>
+
+</main>
+
+</body>
+</html>

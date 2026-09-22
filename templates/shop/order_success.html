@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Order Confirmed | Kailash E-Store</title>
+
+    <style>
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+        }
+
+        .wrapper {
+            min-height: 100vh;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            max-width: 550px;
+            width: 100%;
+
+            padding: 45px;
+            border-radius: 16px;
+
+            text-align: center;
+
+            box-shadow: 0 10px 35px rgba(0,0,0,.08);
+        }
+
+        .icon {
+            font-size: 70px;
+        }
+
+        h1 {
+            color: #166534;
+        }
+
+        .order-number {
+            background: #f3f4f6;
+
+            padding: 15px;
+
+            border-radius: 8px;
+
+            font-weight: 700;
+
+            margin: 25px 0;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        a {
+            text-decoration: none;
+            padding: 13px 20px;
+            border-radius: 8px;
+            font-weight: 700;
+        }
+
+        .primary {
+            background: #111827;
+            color: white;
+        }
+
+        .secondary {
+            border: 1px solid #d1d5db;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="wrapper">
+
+    <div class="card">
+
+        <div class="icon">
+            ✅
+        </div>
+
+        <h1>
+            Order Confirmed!
+        </h1>
+
+        <p>
+            Thank you for shopping with
+            Kailash E-Store.
+        </p>
+
+        <div class="order-number">
+
+            Order Number:
+
+            <br>
+
+            {{ order.order_number }}
+
+        </div>
+
+        <p>
+            Order Total:
+            <strong>
+                ₹{{ order.total }}
+            </strong>
+        </p>
+
+        <br>
+
+        <div class="buttons">
+
+            <a
+                href="/dashboard/"
+                class="primary"
+            >
+                View My Orders
+            </a>
+
+            <a
+                href="/"
+                class="secondary"
+            >
+                Continue Shopping
+            </a>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

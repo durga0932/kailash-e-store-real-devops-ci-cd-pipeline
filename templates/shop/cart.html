@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Shopping Cart | Kailash E-Store</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #111827;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .header-inner {
+            max-width: 1200px;
+            margin: auto;
+            padding: 20px;
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .logo span {
+            color: #2563eb;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 45px 20px;
+        }
+
+        h1 {
+            margin-bottom: 25px;
+        }
+
+        .cart-layout {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 25px;
+        }
+
+        .cart-items {
+            background: white;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .item {
+            display: grid;
+            grid-template-columns: 100px 1fr auto;
+            gap: 20px;
+            align-items: center;
+
+            padding: 20px;
+
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .item:last-child {
+            border-bottom: 0;
+        }
+
+        .image {
+            width: 100px;
+            height: 100px;
+
+            background: #f3f4f6;
+            border-radius: 10px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            overflow: hidden;
+        }
+
+        .image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .placeholder {
+            font-size: 40px;
+        }
+
+        .name {
+            font-size: 17px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .category {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        .price {
+            font-weight: 700;
+        }
+
+        .quantity-form {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .quantity-form input {
+            width: 65px;
+            padding: 8px;
+
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+        }
+
+        .update {
+            padding: 8px 12px;
+
+            background: #111827;
+            color: white;
+
+            border: 0;
+            border-radius: 6px;
+
+            cursor: pointer;
+        }
+
+        .remove {
+            color: #dc2626;
+            font-size: 13px;
+        }
+
+        .item-total {
+            font-size: 18px;
+            font-weight: 800;
+            text-align: right;
+        }
+
+        .summary {
+            background: white;
+            border-radius: 14px;
+            padding: 25px;
+
+            height: fit-content;
+        }
+
+        .summary h2 {
+            margin-top: 0;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .total {
+            font-size: 20px;
+            font-weight: 800;
+            border-bottom: 0;
+        }
+
+        .checkout {
+            display: block;
+            text-align: center;
+
+            margin-top: 15px;
+            padding: 14px;
+
+            background: #2563eb;
+            color: white;
+
+            border-radius: 8px;
+
+            font-weight: 700;
+        }
+
+        .continue {
+            display: block;
+            text-align: center;
+
+            margin-top: 12px;
+            padding: 12px;
+
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+        }
+
+        .empty {
+            background: white;
+            border-radius: 14px;
+
+            padding: 70px 30px;
+
+            text-align: center;
+        }
+
+        .empty-icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+
+        .shop-btn {
+            display: inline-block;
+
+            margin-top: 20px;
+            padding: 13px 22px;
+
+            background: #111827;
+            color: white;
+
+            border-radius: 8px;
+            font-weight: 700;
+        }
+
+        @media (max-width: 800px) {
+
+            .cart-layout {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+        @media (max-width: 550px) {
+
+            .item {
+                grid-template-columns: 75px 1fr;
+            }
+
+            .image {
+                width: 75px;
+                height: 75px;
+            }
+
+            .item-total {
+                grid-column: 2;
+                text-align: left;
+            }
+
+        }
+    </style>
+</head>
+
+<body>
+
+<header class="header">
+
+    <div class="header-inner">
+
+        <a href="/" class="logo">
+            Kailash <span>E-Store</span>
+        </a>
+
+        <div>
+            <a href="/">Continue Shopping</a>
+        </div>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <h1>Shopping Cart</h1>
+
+    {% if items %}
+
+        <div class="cart-layout">
+
+            <div class="cart-items">
+
+                {% for item in items %}
+
+                    <div class="item">
+
+                        <div class="image">
+
+                            {% if item.product.image %}
+
+                                <img
+                                    src="{{ item.product.image.url }}"
+                                    alt="{{ item.product.name }}"
+                                >
+
+                            {% else %}
+
+                                <div class="placeholder">
+                                    🛍️
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+
+                        <div>
+
+                            <div class="name">
+                                {{ item.product.name }}
+                            </div>
+
+                            <div class="category">
+                                {{ item.product.category.name }}
+                            </div>
+
+                            <div class="price">
+                                ₹{{ item.product.price }}
+                            </div>
+
+
+                            <form
+                                method="post"
+                                action="{% url 'shop:update_cart' item.product.id %}"
+                                class="quantity-form"
+                            >
+
+                                {% csrf_token %}
+
+                                <label>
+                                    Qty:
+                                </label>
+
+                                <input
+                                    type="number"
+                                    name="quantity"
+                                    value="{{ item.quantity }}"
+                                    min="1"
+                                    max="{{ item.product.stock }}"
+                                >
+
+                                <button
+                                    type="submit"
+                                    class="update"
+                                >
+                                    Update
+                                </button>
+
+                            </form>
+
+
+                            <div style="margin-top:10px;">
+
+                                <a
+                                    href="{% url 'shop:remove_from_cart' item.product.id %}"
+                                    class="remove"
+                                >
+                                    Remove
+                                </a>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="item-total">
+
+                            ₹{{ item.total }}
+
+                        </div>
+
+                    </div>
+
+                {% endfor %}
+
+            </div>
+
+
+            <aside class="summary">
+
+                <h2>
+                    Order Summary
+                </h2>
+
+                <div class="row">
+
+                    <span>
+                        Subtotal
+                    </span>
+
+                    <strong>
+                        ₹{{ subtotal }}
+                    </strong>
+
+                </div>
+
+
+                <div class="row">
+
+                    <span>
+                        Shipping
+                    </span>
+
+                    <strong>
+                        {% if shipping %}
+                            ₹{{ shipping }}
+                        {% else %}
+                            FREE
+                        {% endif %}
+                    </strong>
+
+                </div>
+
+
+                <div class="row total">
+
+                    <span>
+                        Total
+                    </span>
+
+                    <span>
+                        ₹{{ total }}
+                    </span>
+
+                </div>
+
+
+                {% if user.is_authenticated %}
+
+                    <a
+                        href="{% url 'shop:checkout' %}"
+                        class="checkout"
+                    >
+                        Proceed to Checkout
+                    </a>
+
+                {% else %}
+
+                    <a
+                        href="{% url 'accounts:login' %}?next={% url 'shop:checkout' %}"
+                        class="checkout"
+                    >
+                        Login to Checkout
+                    </a>
+
+                {% endif %}
+
+
+                <a
+                    href="/"
+                    class="continue"
+                >
+                    Continue Shopping
+                </a>
+
+            </aside>
+
+        </div>
+
+    {% else %}
+
+        <div class="empty">
+
+            <div class="empty-icon">
+                🛒
+            </div>
+
+            <h2>
+                Your cart is empty
+            </h2>
+
+            <p>
+                Looks like you haven't added
+                anything to your cart yet.
+            </p>
+
+            <a
+                href="/"
+                class="shop-btn"
+            >
+                Start Shopping
+            </a>
+
+        </div>
+
+    {% endif %}
+
+</main>
+
+</body>
+</html>
