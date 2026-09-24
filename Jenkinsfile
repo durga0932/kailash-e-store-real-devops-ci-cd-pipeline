@@ -10,8 +10,8 @@ pipeline {
     parameters {
         booleanParam(
             name: 'APPLY_INFRA',
-            defaultValue: true,
-            description: 'Run Terraform plan + apply before the application release. For production, use a separate controlled infrastructure pipeline.'
+            defaultValue: false,
+            description: 'Run Terraform plan + apply before the application release. Enable only when infrastructure changes are required.'
         )
     }
 
@@ -21,7 +21,6 @@ pipeline {
         ECR_REPOSITORY = 'kailash-e-store-prod'
         EKS_CLUSTER = 'kailash-e-store-prod'
         IMAGE_TAG = "${BUILD_NUMBER}"
-        DOCKERHUB_USERNAME = 'shivsoftapp'
         DOCKERHUB_REPOSITORY = 'kailash-e-store'
         GITLAB_REPOSITORY = 'https://gitlab.com/SOFTAPP-TECHNOLOGIES/kailash-e-store-real-devops-ci-cd-pipeline.git'
     }
@@ -37,15 +36,27 @@ pipeline {
         stage('2. Terraform Infrastructure') {
             steps {
                 dir('terraform') {
-                    withCredentials([string(credentialsId: 'rds-db-password', variable: 'TF_VAR_db_password')]) {
+                    withCredentials([
+                        string(
+                            credentialsId: 'rds-db-password',
+                            variable: 'TF_VAR_db_password'
+                        )
+                    ]) {
                         sh '''
                             set -e
+
                             terraform init -input=false
                             terraform validate
-                            terraform plan -input=false -out=tfplan
+
+                            terraform plan \
+                              -input=false \
+                              -out=tfplan
 
                             if [ "${APPLY_INFRA}" = "true" ]; then
-                              terraform apply -input=false -auto-approve tfplan
+                                terraform apply \
+                                  -input=false \
+                                  -auto-approve \
+                                  tfplan
                             fi
                         '''
                     }
@@ -57,13 +68,19 @@ pipeline {
             steps {
                 dir('terraform') {
                     sh '''
-                        terraform output -raw jenkins_instance_id > /tmp/jenkins_id
-                        terraform output -raw sonarqube_instance_id > /tmp/sonarqube_id
+                        set -e
+
+                        terraform output -raw jenkins_instance_id \
+                          > /tmp/jenkins_id
+
+                        terraform output -raw sonarqube_instance_id \
+                          > /tmp/sonarqube_id
                     '''
                 }
 
                 sh '''
                     set -e
+
                     JENKINS_ID=$(cat /tmp/jenkins_id)
                     SONAR_ID=$(cat /tmp/sonarqube_id)
 
@@ -87,8 +104,13 @@ EOF_INVENTORY
             steps {
                 sh '''
                     set -e
-                    ansible-galaxy collection install -r ansible/requirements.yml
-                    ansible-playbook -i ansible/inventory.ini ansible/site.yml
+
+                    ansible-galaxy collection install \
+                      -r ansible/requirements.yml
+
+                    ansible-playbook \
+                      -i ansible/inventory.ini \
+                      ansible/playbook.yml
                 '''
             }
         }
@@ -97,10 +119,13 @@ EOF_INVENTORY
             steps {
                 sh '''
                     set -e
+
                     python3 -m venv .ci-venv
                     . .ci-venv/bin/activate
+
                     python -m pip install --upgrade pip
                     pip install -r requirements.txt
+
                     python manage.py check
                     python manage.py test
                 '''
@@ -111,14 +136,23 @@ EOF_INVENTORY
             steps {
                 script {
                     env.SONAR_HOST_URL = sh(
-                        script: 'cd terraform && terraform output -raw sonarqube_url',
+                        script: '''
+                            cd terraform
+                            terraform output -raw sonarqube_url
+                        ''',
                         returnStdout: true
                     ).trim()
                 }
 
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                withCredentials([
+                    string(
+                        credentialsId: 'sonar-token',
+                        variable: 'SONAR_TOKEN'
+                    )
+                ]) {
                     sh '''
                         set -e
+
                         sonar-scanner \
                           -Dsonar.host.url="${SONAR_HOST_URL}" \
                           -Dsonar.token="${SONAR_TOKEN}"
@@ -129,7 +163,15 @@ EOF_INVENTORY
 
         stage('7. Trivy Filesystem Scan') {
             steps {
-                sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed .'
+                sh '''
+                    set -e
+
+                    trivy fs \
+                      --exit-code 1 \
+                      --severity HIGH,CRITICAL \
+                      --ignore-unfixed \
+                      .
+                '''
             }
         }
 
@@ -137,9 +179,16 @@ EOF_INVENTORY
             steps {
                 sh '''
                     set -e
-                    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-                    IMAGE_URI=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}
-                    docker build -t ${IMAGE_URI} .
+
+                    ACCOUNT_ID=$(aws sts get-caller-identity \
+                      --query Account \
+                      --output text)
+
+                    IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+                    docker build \
+                      -t "${IMAGE_URI}" \
+                      .
                 '''
             }
         }
@@ -148,42 +197,79 @@ EOF_INVENTORY
             steps {
                 sh '''
                     set -e
-                    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-                    IMAGE_URI=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}
-                    trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ${IMAGE_URI}
+
+                    ACCOUNT_ID=$(aws sts get-caller-identity \
+                      --query Account \
+                      --output text)
+
+                    IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+                    trivy image \
+                      --exit-code 1 \
+                      --severity HIGH,CRITICAL \
+                      --ignore-unfixed \
+                      "${IMAGE_URI}"
                 '''
             }
         }
 
         stage('10. Push Image - ECR + Docker Hub Mirror') {
             steps {
+
                 sh '''
                     set -e
-                    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-                    ECR_HOST=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                    ECR_IMAGE=${ECR_HOST}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
-                    aws ecr get-login-password --region ${AWS_REGION} | \
-                      docker login --username AWS --password-stdin ${ECR_HOST}
+                    ACCOUNT_ID=$(aws sts get-caller-identity \
+                      --query Account \
+                      --output text)
 
-                    docker push ${ECR_IMAGE}
+                    ECR_HOST="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                    ECR_IMAGE="${ECR_HOST}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+                    aws ecr get-login-password \
+                      --region "${AWS_REGION}" | \
+                      docker login \
+                      --username AWS \
+                      --password-stdin "${ECR_HOST}"
+
+                    docker push "${ECR_IMAGE}"
                 '''
 
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
                     sh '''
                         set -e
-                        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-                        ECR_IMAGE=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}
 
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker tag ${ECR_IMAGE} ${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}:${IMAGE_TAG}
-                        docker push ${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}:${IMAGE_TAG}
-                        docker tag ${ECR_IMAGE} ${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}:latest
-                        docker push ${DOCKERHUB_USERNAME}/${DOCKERHUB_REPOSITORY}:latest
+                        ACCOUNT_ID=$(aws sts get-caller-identity \
+                          --query Account \
+                          --output text)
+
+                        ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+                        echo "$DOCKER_PASS" | \
+                          docker login \
+                          --username "$DOCKER_USER" \
+                          --password-stdin
+
+                        docker tag \
+                          "${ECR_IMAGE}" \
+                          "${DOCKER_USER}/${DOCKERHUB_REPOSITORY}:${IMAGE_TAG}"
+
+                        docker push \
+                          "${DOCKER_USER}/${DOCKERHUB_REPOSITORY}:${IMAGE_TAG}"
+
+                        docker tag \
+                          "${ECR_IMAGE}" \
+                          "${DOCKER_USER}/${DOCKERHUB_REPOSITORY}:latest"
+
+                        docker push \
+                          "${DOCKER_USER}/${DOCKERHUB_REPOSITORY}:latest"
+
                         docker logout
                     '''
                 }
@@ -194,17 +280,22 @@ EOF_INVENTORY
             steps {
                 sh '''
                     set -e
-                    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+                    ACCOUNT_ID=$(aws sts get-caller-identity \
+                      --query Account \
+                      --output text)
 
                     aws eks update-kubeconfig \
-                      --region ${AWS_REGION} \
-                      --name ${EKS_CLUSTER}
+                      --region "${AWS_REGION}" \
+                      --name "${EKS_CLUSTER}"
 
                     helm lint helm/kailash-e-store
 
-                    helm upgrade --install kailash-e-store ./helm/kailash-e-store \
-                      --set image.repository=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY} \
-                      --set image.tag=${IMAGE_TAG} \
+                    helm upgrade --install \
+                      kailash-e-store \
+                      ./helm/kailash-e-store \
+                      --set image.repository="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}" \
+                      --set image.tag="${IMAGE_TAG}" \
                       --wait \
                       --timeout 10m
                 '''
@@ -215,11 +306,15 @@ EOF_INVENTORY
             steps {
                 sh '''
                     set -e
+
                     kubectl get nodes
                     kubectl get pods -A
                     kubectl get svc
                     kubectl get hpa
-                    kubectl rollout status deployment/kailash-e-store-kailash-e-store --timeout=300s
+
+                    kubectl rollout status \
+                      deployment/kailash-e-store-kailash-e-store \
+                      --timeout=300s
                 '''
             }
         }
@@ -228,8 +323,10 @@ EOF_INVENTORY
             steps {
                 sh '''
                     set -e
+
                     kubectl get endpoints
-                    kubectl get pods -l app=kailash-e-store
+                    kubectl get pods \
+                      -l app=kailash-e-store
                 '''
             }
         }
@@ -238,11 +335,15 @@ EOF_INVENTORY
             steps {
                 sh '''
                     set -e
-                    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
+
+                    helm repo add prometheus-community \
+                      https://prometheus-community.github.io/helm-charts || true
+
                     helm repo update
 
                     kubectl create namespace monitoring \
-                      --dry-run=client -o yaml | kubectl apply -f -
+                      --dry-run=client \
+                      -o yaml | kubectl apply -f -
 
                     helm upgrade --install monitoring \
                       prometheus-community/kube-prometheus-stack \
@@ -259,11 +360,13 @@ EOF_INVENTORY
 
     post {
         success {
-            echo 'Kailash E-Store: fully automated AWS DevSecOps pipeline completed.'
+            echo 'Kailash E-Store: AWS DevSecOps pipeline completed successfully.'
         }
+
         failure {
             echo 'Pipeline failed. Check the failed stage and Jenkins console output.'
         }
+
         always {
             echo "Build number: ${BUILD_NUMBER}"
             echo "GitLab repository: ${GITLAB_REPOSITORY}"
