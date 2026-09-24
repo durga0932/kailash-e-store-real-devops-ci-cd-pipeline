@@ -7,7 +7,9 @@
 - name: Configure Jenkins CI/CD controller
   hosts: jenkins
   become: true
+
   tasks:
+
     - name: Install Jenkins operational packages
       ansible.builtin.apt:
         name:
@@ -61,11 +63,14 @@
         enabled: true
         state: started
 
+
 - name: Configure SonarQube server
   hosts: sonarqube
   become: true
+
   tasks:
-    - name: Ensure Docker is installed and running
+
+    - name: Ensure Docker is installed
       ansible.builtin.apt:
         name: docker.io
         state: present
