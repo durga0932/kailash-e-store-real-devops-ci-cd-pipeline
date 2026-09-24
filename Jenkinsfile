@@ -5,13 +5,15 @@ pipeline {
         timestamps()
         disableConcurrentBuilds()
         skipDefaultCheckout(true)
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timeout(time: 60, unit: 'MINUTES')
     }
 
     parameters {
         booleanParam(
             name: 'APPLY_INFRA',
             defaultValue: false,
-            description: 'Run Terraform plan + apply before the application release. Enable only when infrastructure changes are required.'
+            description: 'Run Terraform apply. Keep false for normal application releases; enable when infrastructure changes are required.'
         )
     }
 
@@ -23,40 +25,87 @@ pipeline {
         IMAGE_TAG = "${BUILD_NUMBER}"
         DOCKERHUB_REPOSITORY = 'kailash-e-store'
         GITLAB_REPOSITORY = 'https://gitlab.com/SOFTAPP-TECHNOLOGIES/kailash-e-store-real-devops-ci-cd-pipeline.git'
+
+        AWS_PAGER = ''
+        TF_IN_AUTOMATION = 'true'
+        TF_INPUT = 'false'
     }
 
     stages {
 
+        // =========================================================
+        // 1. CHECKOUT
+        // =========================================================
+
         stage('1. Checkout') {
             steps {
                 checkout scm
+
+                sh '''
+                    set -e
+
+                    echo "===== GIT / WORKSPACE ====="
+
+                    git rev-parse --short HEAD
+                    git branch --show-current || true
+
+                    echo "Repository: ${GITLAB_REPOSITORY}"
+                    echo "Build: ${BUILD_NUMBER}"
+                '''
             }
         }
 
+
+        // =========================================================
+        // 2. TERRAFORM
+        // =========================================================
+
         stage('2. Terraform Infrastructure') {
             steps {
+
                 dir('terraform') {
+
                     withCredentials([
                         string(
                             credentialsId: 'rds-db-password',
                             variable: 'TF_VAR_db_password'
                         )
                     ]) {
+
                         sh '''
                             set -e
 
+                            echo "===== TERRAFORM INIT ====="
+
                             terraform init -input=false
+
+
+                            echo "===== TERRAFORM VALIDATE ====="
+
                             terraform validate
+
+
+                            echo "===== TERRAFORM PLAN ====="
 
                             terraform plan \
                               -input=false \
                               -out=tfplan
 
+
                             if [ "${APPLY_INFRA}" = "true" ]; then
+
+                                echo "===== TERRAFORM APPLY ENABLED ====="
+
                                 terraform apply \
                                   -input=false \
                                   -auto-approve \
                                   tfplan
+
+                            else
+
+                                echo "Terraform apply skipped."
+                                echo "Existing infrastructure/state will be used."
+
                             fi
                         '''
                     }
@@ -64,49 +113,208 @@ pipeline {
             }
         }
 
-        stage('3. Generate Ansible Inventory') {
+
+        // =========================================================
+        // 3. EC2 AUTO DETECTION + ANSIBLE INVENTORY
+        // =========================================================
+
+        stage('3. EC2 Detect & Generate Ansible Inventory') {
+
             steps {
+
                 dir('terraform') {
+
                     sh '''
                         set -e
 
-                        terraform output -raw jenkins_instance_id \
-                          > /tmp/jenkins_id
+                        echo "======================================"
+                        echo " EC2 INSTANCE AUTO DETECTION"
+                        echo "======================================"
 
-                        terraform output -raw sonarqube_instance_id \
-                          > /tmp/sonarqube_id
+                        JENKINS_ID=$(terraform output -raw jenkins_instance_id)
+
+                        SONAR_ID=$(terraform output -raw sonarqube_instance_id)
+
+
+                        test -n "${JENKINS_ID}"
+                        test -n "${SONAR_ID}"
+
+
+                        echo "Jenkins Instance ID   : ${JENKINS_ID}"
+                        echo "SonarQube Instance ID : ${SONAR_ID}"
+
+
+                        echo "======================================"
+                        echo " DETECT JENKINS EC2"
+                        echo "======================================"
+
+                        JENKINS_INFO=$(aws ec2 describe-instances \
+                          --region "${AWS_REGION}" \
+                          --instance-ids "${JENKINS_ID}" \
+                          --query 'Reservations[0].Instances[0].[PrivateIpAddress,PublicIpAddress,State.Name]' \
+                          --output text)
+
+
+                        echo "======================================"
+                        echo " DETECT SONARQUBE EC2"
+                        echo "======================================"
+
+                        SONAR_INFO=$(aws ec2 describe-instances \
+                          --region "${AWS_REGION}" \
+                          --instance-ids "${SONAR_ID}" \
+                          --query 'Reservations[0].Instances[0].[PrivateIpAddress,PublicIpAddress,State.Name]' \
+                          --output text)
+
+
+                        JENKINS_PRIVATE_IP=$(echo "${JENKINS_INFO}" | awk '{print $1}')
+                        JENKINS_PUBLIC_IP=$(echo "${JENKINS_INFO}" | awk '{print $2}')
+                        JENKINS_STATE=$(echo "${JENKINS_INFO}" | awk '{print $3}')
+
+
+                        SONARQUBE_PRIVATE_IP=$(echo "${SONAR_INFO}" | awk '{print $1}')
+                        SONARQUBE_PUBLIC_IP=$(echo "${SONAR_INFO}" | awk '{print $2}')
+                        SONARQUBE_STATE=$(echo "${SONAR_INFO}" | awk '{print $3}')
+
+
+                        echo ""
+                        echo "========== JENKINS =========="
+
+                        echo "Instance ID : ${JENKINS_ID}"
+                        echo "Private IP  : ${JENKINS_PRIVATE_IP}"
+                        echo "Public IP   : ${JENKINS_PUBLIC_IP}"
+                        echo "State       : ${JENKINS_STATE}"
+
+
+                        echo ""
+                        echo "========== SONARQUBE =========="
+
+                        echo "Instance ID : ${SONAR_ID}"
+                        echo "Private IP  : ${SONARQUBE_PRIVATE_IP}"
+                        echo "Public IP   : ${SONARQUBE_PUBLIC_IP}"
+                        echo "State       : ${SONARQUBE_STATE}"
+
+
+                        test "${JENKINS_STATE}" = "running"
+                        test "${SONARQUBE_STATE}" = "running"
+
+
+                        echo ""
+                        echo "======================================"
+                        echo " AWS SSM VALIDATION"
+                        echo "======================================"
+
+
+                        JENKINS_SSM_COUNT=$(aws ssm describe-instance-information \
+                          --region "${AWS_REGION}" \
+                          --filters "Key=InstanceIds,Values=${JENKINS_ID}" \
+                          --query 'length(InstanceInformationList)' \
+                          --output text)
+
+
+                        SONAR_SSM_COUNT=$(aws ssm describe-instance-information \
+                          --region "${AWS_REGION}" \
+                          --filters "Key=InstanceIds,Values=${SONAR_ID}" \
+                          --query 'length(InstanceInformationList)' \
+                          --output text)
+
+
+                        echo "Jenkins SSM Managed : ${JENKINS_SSM_COUNT}"
+                        echo "SonarQube SSM Managed : ${SONAR_SSM_COUNT}"
+
+
+                        test "${JENKINS_SSM_COUNT}" -ge 1
+                        test "${SONAR_SSM_COUNT}" -ge 1
+
+
+                        echo ""
+                        echo "======================================"
+                        echo " EXPORT EC2 INFORMATION"
+                        echo "======================================"
+
+
+                        cat > ../ec2-details.env <<EOF_EC2
+
+JENKINS_INSTANCE_ID=${JENKINS_ID}
+JENKINS_PRIVATE_IP=${JENKINS_PRIVATE_IP}
+JENKINS_PUBLIC_IP=${JENKINS_PUBLIC_IP}
+
+SONARQUBE_INSTANCE_ID=${SONAR_ID}
+SONARQUBE_PRIVATE_IP=${SONARQUBE_PRIVATE_IP}
+SONARQUBE_PUBLIC_IP=${SONARQUBE_PUBLIC_IP}
+
+EOF_EC2
                     '''
                 }
+
 
                 sh '''
                     set -e
 
-                    JENKINS_ID=$(cat /tmp/jenkins_id)
-                    SONAR_ID=$(cat /tmp/sonarqube_id)
+                    echo "======================================"
+                    echo " GENERATE SSM INVENTORY"
+                    echo "======================================"
+
+
+                    . ./ec2-details.env
+
 
                     cat > ansible/inventory.ini <<EOF_INVENTORY
+
 [jenkins]
-jenkins-host ansible_host=${JENKINS_ID}
+jenkins-host ansible_host=${JENKINS_INSTANCE_ID}
 
 [sonarqube]
-sonarqube-host ansible_host=${SONAR_ID}
+sonarqube-host ansible_host=${SONARQUBE_INSTANCE_ID}
 
 [all:vars]
 ansible_connection=amazon.aws.aws_ssm
 ansible_aws_ssm_region=${AWS_REGION}
 ansible_python_interpreter=/usr/bin/python3
+
 EOF_INVENTORY
+
+
+                    echo ""
+                    echo "===== GENERATED INVENTORY ====="
+
+                    cat ansible/inventory.ini
+
+
+                    echo ""
+                    echo "===== EC2 DETAILS ====="
+
+                    cat ec2-details.env
                 '''
             }
         }
 
+
+        // =========================================================
+        // 4. ANSIBLE
+        // =========================================================
+
         stage('4. Ansible Configuration') {
+
             steps {
+
                 sh '''
                     set -e
 
+                    echo "===== INSTALL ANSIBLE COLLECTIONS ====="
+
                     ansible-galaxy collection install \
-                      -r ansible/requirements.yml
+                      -r ansible/requirements.yml \
+                      --force
+
+
+                    echo "===== INVENTORY VALIDATION ====="
+
+                    ansible-inventory \
+                      -i ansible/inventory.ini \
+                      --graph
+
+
+                    echo "===== ANSIBLE CONFIGURATION ====="
 
                     ansible-playbook \
                       -i ansible/inventory.ini \
@@ -115,34 +323,93 @@ EOF_INVENTORY
             }
         }
 
+
+        // =========================================================
+        // 5. APPLICATION TEST
+        // =========================================================
+
         stage('5. Install & Test') {
+
             steps {
+
                 sh '''
                     set -e
 
                     python3 -m venv .ci-venv
+
                     . .ci-venv/bin/activate
 
+
                     python -m pip install --upgrade pip
+
                     pip install -r requirements.txt
 
+
+                    echo "===== DJANGO CHECK ====="
+
                     python manage.py check
+
+
+                    echo "===== DJANGO TESTS ====="
+
                     python manage.py test
+
+
+                    echo "===== MIGRATION CHECK ====="
+
+                    python manage.py makemigrations \
+                      --check \
+                      --dry-run
                 '''
             }
         }
 
+
+        // =========================================================
+        // 6. SONARQUBE
+        // =========================================================
+
         stage('6. SonarQube Analysis') {
+
             steps {
+
                 script {
+
                     env.SONAR_HOST_URL = sh(
                         script: '''
                             cd terraform
-                            terraform output -raw sonarqube_url
+
+                            terraform output \
+                              -raw sonarqube_url \
+                              2>/dev/null || true
                         ''',
                         returnStdout: true
                     ).trim()
+
+
+                    if (!env.SONAR_HOST_URL) {
+
+                        sh '''
+                            . ./ec2-details.env
+
+                            test -n "${SONARQUBE_PRIVATE_IP}"
+                        '''
+
+
+                        env.SONAR_HOST_URL = sh(
+                            script: '''
+                                . ./ec2-details.env
+
+                                echo "http://${SONARQUBE_PRIVATE_IP}:9000"
+                            ''',
+                            returnStdout: true
+                        ).trim()
+                    }
+
+
+                    echo "SonarQube URL: ${env.SONAR_HOST_URL}"
                 }
+
 
                 withCredentials([
                     string(
@@ -150,6 +417,7 @@ EOF_INVENTORY
                         variable: 'SONAR_TOKEN'
                     )
                 ]) {
+
                     sh '''
                         set -e
 
@@ -161,8 +429,15 @@ EOF_INVENTORY
             }
         }
 
+
+        // =========================================================
+        // 7. TRIVY FILESYSTEM
+        // =========================================================
+
         stage('7. Trivy Filesystem Scan') {
+
             steps {
+
                 sh '''
                     set -e
 
@@ -175,34 +450,62 @@ EOF_INVENTORY
             }
         }
 
+
+        // =========================================================
+        // 8. DOCKER BUILD
+        // =========================================================
+
         stage('8. Docker Build') {
+
             steps {
+
                 sh '''
                     set -e
+
 
                     ACCOUNT_ID=$(aws sts get-caller-identity \
                       --query Account \
                       --output text)
 
+
                     IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
+
+                    echo "Docker Image:"
+                    echo "${IMAGE_URI}"
+
+
                     docker build \
+                      --pull \
                       -t "${IMAGE_URI}" \
                       .
+
+
+                    docker image inspect "${IMAGE_URI}" >/dev/null
                 '''
             }
         }
 
+
+        // =========================================================
+        // 9. TRIVY IMAGE
+        // =========================================================
+
         stage('9. Trivy Image Scan') {
+
             steps {
+
                 sh '''
                     set -e
+
 
                     ACCOUNT_ID=$(aws sts get-caller-identity \
                       --query Account \
                       --output text)
 
+
                     IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
 
                     trivy image \
                       --exit-code 1 \
@@ -213,18 +516,31 @@ EOF_INVENTORY
             }
         }
 
+
+        // =========================================================
+        // 10. ECR + DOCKER HUB
+        // =========================================================
+
         stage('10. Push Image - ECR + Docker Hub Mirror') {
+
             steps {
 
                 sh '''
                     set -e
 
+
                     ACCOUNT_ID=$(aws sts get-caller-identity \
                       --query Account \
                       --output text)
 
+
                     ECR_HOST="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
                     ECR_IMAGE="${ECR_HOST}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+
+                    echo "===== LOGIN TO ECR ====="
+
 
                     aws ecr get-login-password \
                       --region "${AWS_REGION}" | \
@@ -232,8 +548,13 @@ EOF_INVENTORY
                       --username AWS \
                       --password-stdin "${ECR_HOST}"
 
+
+                    echo "===== PUSH TO ECR ====="
+
+
                     docker push "${ECR_IMAGE}"
                 '''
+
 
                 withCredentials([
                     usernamePassword(
@@ -242,33 +563,42 @@ EOF_INVENTORY
                         passwordVariable: 'DOCKER_PASS'
                     )
                 ]) {
+
                     sh '''
                         set -e
+
 
                         ACCOUNT_ID=$(aws sts get-caller-identity \
                           --query Account \
                           --output text)
 
+
                         ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
 
                         echo "$DOCKER_PASS" | \
                           docker login \
                           --username "$DOCKER_USER" \
                           --password-stdin
 
+
                         docker tag \
                           "${ECR_IMAGE}" \
                           "${DOCKER_USER}/${DOCKERHUB_REPOSITORY}:${IMAGE_TAG}"
 
+
                         docker push \
                           "${DOCKER_USER}/${DOCKERHUB_REPOSITORY}:${IMAGE_TAG}"
+
 
                         docker tag \
                           "${ECR_IMAGE}" \
                           "${DOCKER_USER}/${DOCKERHUB_REPOSITORY}:latest"
 
+
                         docker push \
                           "${DOCKER_USER}/${DOCKERHUB_REPOSITORY}:latest"
+
 
                         docker logout
                     '''
@@ -276,74 +606,235 @@ EOF_INVENTORY
             }
         }
 
+
+        // =========================================================
+        // 11. HELM -> EKS
+        // =========================================================
+
         stage('11. Helm Deploy to EKS') {
+
             steps {
+
                 sh '''
                     set -e
+
 
                     ACCOUNT_ID=$(aws sts get-caller-identity \
                       --query Account \
                       --output text)
 
+
+                    ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
+
+
+                    echo "===== UPDATE EKS KUBECONFIG ====="
+
+
                     aws eks update-kubeconfig \
                       --region "${AWS_REGION}" \
                       --name "${EKS_CLUSTER}"
 
+
+                    kubectl config current-context
+
+
+                    echo "===== HELM LINT ====="
+
+
                     helm lint helm/kailash-e-store
+
+
+                    echo "===== HELM TEMPLATE VALIDATION ====="
+
+
+                    helm template \
+                      kailash-e-store \
+                      ./helm/kailash-e-store \
+                      --set image.repository="${ECR_IMAGE}" \
+                      --set image.tag="${IMAGE_TAG}" \
+                      > /tmp/kailash-e-store-rendered.yaml
+
+
+                    echo "===== HELM DEPLOY ====="
+
 
                     helm upgrade --install \
                       kailash-e-store \
                       ./helm/kailash-e-store \
-                      --set image.repository="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}" \
+                      --set image.repository="${ECR_IMAGE}" \
                       --set image.tag="${IMAGE_TAG}" \
                       --wait \
                       --timeout 10m
+
+
+                    helm status kailash-e-store
                 '''
             }
         }
 
+
+        // =========================================================
+        // 12. EKS VERIFICATION
+        // =========================================================
+
         stage('12. EKS Verification') {
+
             steps {
+
                 sh '''
                     set -e
 
+
+                    echo "===== EKS NODES ====="
+
                     kubectl get nodes
+
+
+                    echo "===== ALL PODS ====="
+
                     kubectl get pods -A
+
+
+                    echo "===== SERVICES ====="
+
                     kubectl get svc
+
+
+                    echo "===== HPA ====="
+
                     kubectl get hpa
+
+
+                    echo "===== ROLLOUT ====="
 
                     kubectl rollout status \
                       deployment/kailash-e-store-kailash-e-store \
                       --timeout=300s
+
+
+                    kubectl get deployment \
+                      kailash-e-store-kailash-e-store
                 '''
             }
         }
+
+
+        // =========================================================
+        // 13. PRODUCTION HEALTH
+        // =========================================================
 
         stage('13. Production Health Check') {
+
             steps {
+
                 sh '''
                     set -e
 
+
+                    echo "===== ENDPOINTS ====="
+
                     kubectl get endpoints
+
+
+                    echo "===== APPLICATION PODS ====="
+
                     kubectl get pods \
-                      -l app=kailash-e-store
+                      -l app=kailash-e-store \
+                      -o wide
+
+
+                    echo "===== SERVICE ====="
+
+                    kubectl get svc \
+                      kailash-e-store-kailash-e-store \
+                      -o wide
+
+
+                    echo "===== LOAD BALANCER HEALTH ====="
+
+
+                    SERVICE_IP=$(kubectl get svc \
+                      kailash-e-store-kailash-e-store \
+                      -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
+                      2>/dev/null || true)
+
+
+                    SERVICE_HOSTNAME=$(kubectl get svc \
+                      kailash-e-store-kailash-e-store \
+                      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+                      2>/dev/null || true)
+
+
+                    if [ -n "${SERVICE_IP}" ]; then
+
+                        echo "LoadBalancer IP: ${SERVICE_IP}"
+
+                        curl -fsS \
+                          --max-time 20 \
+                          "http://${SERVICE_IP}/" \
+                          >/dev/null
+
+                    elif [ -n "${SERVICE_HOSTNAME}" ]; then
+
+                        echo "LoadBalancer Hostname: ${SERVICE_HOSTNAME}"
+
+                        curl -fsS \
+                          --max-time 20 \
+                          "http://${SERVICE_HOSTNAME}/" \
+                          >/dev/null
+
+                    else
+
+                        echo "LoadBalancer address is not available yet."
+
+                        kubectl describe svc \
+                          kailash-e-store-kailash-e-store
+
+                        exit 1
+
+                    fi
+
+
+                    echo "Production health check completed successfully."
                 '''
             }
         }
 
+
+        // =========================================================
+        // 14. MONITORING
+        // =========================================================
+
         stage('14. Monitoring Stack') {
+
             steps {
+
                 sh '''
                     set -e
 
+
+                    echo "===== PROMETHEUS HELM REPOSITORY ====="
+
+
                     helm repo add prometheus-community \
-                      https://prometheus-community.github.io/helm-charts || true
+                      https://prometheus-community.github.io/helm-charts \
+                      || true
+
 
                     helm repo update
 
+
+                    echo "===== MONITORING NAMESPACE ====="
+
+
                     kubectl create namespace monitoring \
                       --dry-run=client \
-                      -o yaml | kubectl apply -f -
+                      -o yaml | \
+                      kubectl apply -f -
+
+
+                    echo "===== KUBE PROMETHEUS STACK ====="
+
 
                     helm upgrade --install monitoring \
                       prometheus-community/kube-prometheus-stack \
@@ -352,24 +843,88 @@ EOF_INVENTORY
                       --wait \
                       --timeout 10m
 
-                    kubectl get pods -n monitoring
+
+                    echo "===== MONITORING PODS ====="
+
+                    kubectl get pods \
+                      -n monitoring
+
+
+                    echo "===== MONITORING SERVICES ====="
+
+                    kubectl get svc \
+                      -n monitoring
                 '''
             }
         }
     }
 
+
+    // =============================================================
+    // POST ACTIONS
+    // =============================================================
+
     post {
+
         success {
-            echo 'Kailash E-Store: AWS DevSecOps pipeline completed successfully.'
+
+            echo '''
+=========================================================
+ KAILASH E-STORE DEVSECOPS PIPELINE SUCCESS
+=========================================================
+
+GitLab
+  -> Terraform
+  -> EC2 Auto Detection
+  -> AWS SSM
+  -> Ansible
+  -> Django Tests
+  -> SonarQube
+  -> Trivy Filesystem
+  -> Docker Build
+  -> Trivy Image
+  -> ECR
+  -> Docker Hub
+  -> Helm
+  -> EKS
+  -> Health Check
+  -> Prometheus/Grafana
+
+=========================================================
+'''
         }
+
 
         failure {
-            echo 'Pipeline failed. Check the failed stage and Jenkins console output.'
+
+            echo '''
+=========================================================
+ KAILASH E-STORE PIPELINE FAILED
+=========================================================
+
+Check the failed Jenkins stage and console output.
+
+=========================================================
+'''
         }
 
+
         always {
-            echo "Build number: ${BUILD_NUMBER}"
-            echo "GitLab repository: ${GITLAB_REPOSITORY}"
+
+            echo "Build Number : ${BUILD_NUMBER}"
+
+            echo "GitLab Repository : ${GITLAB_REPOSITORY}"
+
+
+            sh '''
+                echo "===== FINAL EC2 DETAILS ====="
+
+                if [ -f ec2-details.env ]; then
+                    cat ec2-details.env
+                else
+                    echo "EC2 details were not generated."
+                fi
+            '''
         }
     }
 }
