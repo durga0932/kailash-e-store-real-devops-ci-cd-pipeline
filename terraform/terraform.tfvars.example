@@ -1,0 +1,19 @@
+aws_region              = "ap-south-1"
+project_name            = "kailash-e-store"
+environment             = "prod"
+vpc_cidr                = "10.50.0.0/16"
+jenkins_instance_type   = "t3.medium"
+sonarqube_instance_type = "t3.medium"
+db_instance_class       = "db.t4g.micro"
+redis_node_type         = "cache.t4g.micro"
+db_name                 = "kailashestore"
+db_username             = "estoreadmin"
+
+# Never commit the real password.
+# db_password = "CHANGE_ME"
+
+create_nat_gateway    = true
+jenkins_allowed_cidr  = "0.0.0.0/0"
+sonarqube_admin_cidr  = "0.0.0.0/0"
+eks_kubernetes_version = "1.33"
+eks_node_instance_type = "t3.medium"
