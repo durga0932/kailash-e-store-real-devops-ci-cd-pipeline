@@ -1,13 +1,17 @@
 apiVersion: v1
 kind: Service
+
 metadata:
   name: {{ include "kailash-e-store.fullname" . }}
   labels:
     app: {{ include "kailash-e-store.name" . }}
+
 spec:
   type: {{ .Values.service.type }}
+
   selector:
     app: {{ include "kailash-e-store.name" . }}
+
   ports:
     - name: http
       port: {{ .Values.service.port }}
