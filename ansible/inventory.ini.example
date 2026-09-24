@@ -1,0 +1,14 @@
+# Jenkins generates ansible/inventory.ini after Terraform apply.
+# ansible_host values are EC2 INSTANCE IDs, not public IP addresses.
+# Connection uses AWS SSM; no .pem key is required.
+
+[jenkins]
+jenkins-host ansible_host=JENKINS_INSTANCE_ID
+
+[sonarqube]
+sonarqube-host ansible_host=SONARQUBE_INSTANCE_ID
+
+[all:vars]
+ansible_connection=amazon.aws.aws_ssm
+ansible_aws_ssm_region=ap-south-1
+ansible_python_interpreter=/usr/bin/python3
