@@ -1,7 +1,13 @@
----
 # ============================================================
 # KAILASH E-STORE - ANSIBLE OPERATIONS
-# Jenkins is the controller; EC2 targets are reached using AWS SSM.
+# ============================================================
+# Jenkins is the controller.
+# EC2 targets are reached using AWS SSM.
+# ============================================================
+
+
+# ============================================================
+# 1. JENKINS CI/CD CONTROLLER
 # ============================================================
 
 - name: Configure Jenkins CI/CD controller
@@ -9,6 +15,10 @@
   become: true
 
   tasks:
+
+    # --------------------------------------------------------
+    # Base operational packages
+    # --------------------------------------------------------
 
     - name: Install Jenkins operational packages
       ansible.builtin.apt:
@@ -24,6 +34,11 @@
         state: present
         update_cache: true
 
+
+    # --------------------------------------------------------
+    # Python tooling for Django / CI tasks
+    # --------------------------------------------------------
+
     - name: Install Python build tooling
       ansible.builtin.apt:
         name:
@@ -31,31 +46,104 @@
           - python3-pip
         state: present
 
+
+    # --------------------------------------------------------
+    # Docker access for Jenkins
+    # --------------------------------------------------------
+
+    - name: Ensure Docker group exists
+      ansible.builtin.group:
+        name: docker
+        state: present
+
+
     - name: Add Jenkins to Docker group
       ansible.builtin.user:
         name: jenkins
-        groups: docker
+        groups:
+          - docker
         append: true
 
+
+    # --------------------------------------------------------
+    # Restart Jenkins so Docker group membership is applied
+    # --------------------------------------------------------
+
+    - name: Restart Jenkins after Docker group update
+      ansible.builtin.systemd:
+        name: jenkins
+        enabled: true
+        state: restarted
+        daemon_reload: true
+
+
+    # --------------------------------------------------------
+    # Verify Terraform
+    # --------------------------------------------------------
+
     - name: Verify Terraform is installed
-      ansible.builtin.command: terraform version
+      ansible.builtin.command:
+        cmd: terraform version
       register: terraform_version
       changed_when: false
 
+
+    - name: Display Terraform version
+      ansible.builtin.debug:
+        msg: "{{ terraform_version.stdout }}"
+
+
+    # --------------------------------------------------------
+    # Verify Helm
+    # --------------------------------------------------------
+
     - name: Verify Helm is installed
-      ansible.builtin.command: helm version --short
+      ansible.builtin.command:
+        cmd: helm version --short
       register: helm_version
       changed_when: false
 
+
+    - name: Display Helm version
+      ansible.builtin.debug:
+        msg: "{{ helm_version.stdout }}"
+
+
+    # --------------------------------------------------------
+    # Verify kubectl
+    # --------------------------------------------------------
+
     - name: Verify kubectl is installed
-      ansible.builtin.command: kubectl version --client=true --output=yaml
+      ansible.builtin.command:
+        cmd: kubectl version --client=true --output=yaml
       register: kubectl_version
       changed_when: false
 
+
+    - name: Display kubectl version
+      ansible.builtin.debug:
+        msg: "{{ kubectl_version.stdout }}"
+
+
+    # --------------------------------------------------------
+    # Verify Trivy
+    # --------------------------------------------------------
+
     - name: Verify Trivy is installed
-      ansible.builtin.command: trivy --version
+      ansible.builtin.command:
+        cmd: trivy --version
       register: trivy_version
       changed_when: false
+
+
+    - name: Display Trivy version
+      ansible.builtin.debug:
+        msg: "{{ trivy_version.stdout }}"
+
+
+    # --------------------------------------------------------
+    # Final Jenkins service state
+    # --------------------------------------------------------
 
     - name: Ensure Jenkins is enabled and running
       ansible.builtin.systemd:
@@ -64,17 +152,31 @@
         state: started
 
 
+# ============================================================
+# 2. SONARQUBE SERVER
+# ============================================================
+
 - name: Configure SonarQube server
   hosts: sonarqube
   become: true
 
   tasks:
 
+    # --------------------------------------------------------
+    # Docker installation
+    # --------------------------------------------------------
+
     - name: Ensure Docker is installed
       ansible.builtin.apt:
-        name: docker.io
+        name:
+          - docker.io
         state: present
         update_cache: true
+
+
+    # --------------------------------------------------------
+    # Docker service
+    # --------------------------------------------------------
 
     - name: Enable Docker
       ansible.builtin.systemd:
@@ -82,25 +184,49 @@
         enabled: true
         state: started
 
+
+    # --------------------------------------------------------
+    # SonarQube container
+    # --------------------------------------------------------
+
     - name: Ensure SonarQube container is running
       community.docker.docker_container:
         name: sonarqube
         image: sonarqube:lts-community
         state: started
         restart_policy: unless-stopped
+
         published_ports:
           - "9000:9000"
+
         volumes:
           - "sonarqube_data:/opt/sonarqube/data"
           - "sonarqube_logs:/opt/sonarqube/logs"
           - "sonarqube_extensions:/opt/sonarqube/extensions"
+
+
+    # --------------------------------------------------------
+    # Wait for SonarQube
+    # --------------------------------------------------------
 
     - name: Wait for SonarQube HTTP endpoint
       ansible.builtin.uri:
         url: http://127.0.0.1:9000/api/system/status
         method: GET
         status_code: 200
+
       register: sonar_status
+
       retries: 30
       delay: 10
+
       until: sonar_status.status == 200
+
+
+    # --------------------------------------------------------
+    # Display SonarQube status
+    # --------------------------------------------------------
+
+    - name: Display SonarQube status
+      ansible.builtin.debug:
+        msg: "SonarQube is responding on HTTP port 9000"
