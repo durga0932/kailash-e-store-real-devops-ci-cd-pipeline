@@ -1,4 +1,5 @@
 pipeline {
+
     agent any
 
     options {
@@ -13,7 +14,7 @@ pipeline {
         booleanParam(
             name: 'APPLY_INFRA',
             defaultValue: false,
-            description: 'Run Terraform apply. Keep false for normal application releases; enable when infrastructure changes are required.'
+            description: 'Run Terraform apply. Keep false for normal application releases; enable only when infrastructure changes are required.'
         )
     }
 
@@ -24,11 +25,16 @@ pipeline {
         EKS_CLUSTER = 'kailash-e-store-prod'
         IMAGE_TAG = "${BUILD_NUMBER}"
         DOCKERHUB_REPOSITORY = 'kailash-e-store'
-        GITLAB_REPOSITORY = 'https://gitlab.com/SOFTAPP-TECHNOLOGIES/kailash-e-store-real-devops-ci-cd-pipeline.git'
+
+        GITLAB_REPOSITORY =
+            'https://gitlab.com/SOFTAPP-TECHNOLOGIES/kailash-e-store-real-devops-ci-cd-pipeline.git'
 
         AWS_PAGER = ''
         TF_IN_AUTOMATION = 'true'
         TF_INPUT = 'false'
+
+        TF_STATE_BUCKET = 'kailash-e-store-prod-tfstate-518056141688'
+        TF_STATE_KEY = 'kailash-e-store/terraform.tfstate'
     }
 
     stages {
@@ -38,19 +44,28 @@ pipeline {
         // =========================================================
 
         stage('1. Checkout') {
+
             steps {
+
                 checkout scm
 
                 sh '''
                     set -e
 
-                    echo "===== GIT / WORKSPACE ====="
+                    echo "======================================"
+                    echo " GIT / WORKSPACE"
+                    echo "======================================"
 
                     git rev-parse --short HEAD
                     git branch --show-current || true
 
                     echo "Repository: ${GITLAB_REPOSITORY}"
                     echo "Build: ${BUILD_NUMBER}"
+
+                    echo ""
+                    echo "===== TERRAFORM FILES ====="
+
+                    ls -la terraform || true
                 '''
             }
         }
@@ -61,6 +76,7 @@ pipeline {
         // =========================================================
 
         stage('2. Terraform Infrastructure') {
+
             steps {
 
                 dir('terraform') {
@@ -75,17 +91,97 @@ pipeline {
                         sh '''
                             set -e
 
-                            echo "===== TERRAFORM INIT ====="
+                            echo "======================================"
+                            echo " TERRAFORM BACKEND CONFIGURATION"
+                            echo "======================================"
 
-                            terraform init -input=false
+                            # Ensure Jenkins always uses the shared S3 state.
+                            # This protects the pipeline even if backend.tf
+                            # is missing from an older GitLab commit.
+
+                            if [ ! -f backend.tf ]; then
+
+                                echo "backend.tf not found."
+                                echo "Creating S3 backend configuration..."
+
+                                cat > backend.tf <<EOF_BACKEND
+terraform {
+  backend "s3" {
+    bucket       = "${TF_STATE_BUCKET}"
+    key          = "${TF_STATE_KEY}"
+    region       = "${AWS_REGION}"
+    encrypt      = true
+    use_lockfile = true
+  }
+}
+EOF_BACKEND
+
+                            else
+
+                                echo "backend.tf already exists."
+
+                            fi
+
+                            echo ""
+                            echo "===== BACKEND CONFIGURATION ====="
+
+                            cat backend.tf
 
 
-                            echo "===== TERRAFORM VALIDATE ====="
+                            echo ""
+                            echo "======================================"
+                            echo " TERRAFORM INIT"
+                            echo "======================================"
+
+                            terraform init \
+                              -input=false \
+                              -reconfigure
+
+
+                            echo ""
+                            echo "======================================"
+                            echo " TERRAFORM VALIDATE"
+                            echo "======================================"
 
                             terraform validate
 
 
-                            echo "===== TERRAFORM PLAN ====="
+                            echo ""
+                            echo "======================================"
+                            echo " TERRAFORM STATE"
+                            echo "======================================"
+
+                            terraform state list | head -30 || true
+
+
+                            echo ""
+                            echo "======================================"
+                            echo " TERRAFORM OUTPUTS"
+                            echo "======================================"
+
+                            terraform output || true
+
+
+                            echo ""
+                            echo "======================================"
+                            echo " REQUIRED OUTPUT VALIDATION"
+                            echo "======================================"
+
+                            JENKINS_ID=$(terraform output -raw jenkins_instance_id)
+
+                            SONAR_ID=$(terraform output -raw sonarqube_instance_id)
+
+                            test -n "${JENKINS_ID}"
+                            test -n "${SONAR_ID}"
+
+                            echo "Jenkins Instance ID   : ${JENKINS_ID}"
+                            echo "SonarQube Instance ID : ${SONAR_ID}"
+
+
+                            echo ""
+                            echo "======================================"
+                            echo " TERRAFORM PLAN"
+                            echo "======================================"
 
                             terraform plan \
                               -input=false \
@@ -94,7 +190,10 @@ pipeline {
 
                             if [ "${APPLY_INFRA}" = "true" ]; then
 
-                                echo "===== TERRAFORM APPLY ENABLED ====="
+                                echo ""
+                                echo "======================================"
+                                echo " TERRAFORM APPLY ENABLED"
+                                echo "======================================"
 
                                 terraform apply \
                                   -input=false \
@@ -103,8 +202,9 @@ pipeline {
 
                             else
 
+                                echo ""
                                 echo "Terraform apply skipped."
-                                echo "Existing infrastructure/state will be used."
+                                echo "APPLY_INFRA=false"
 
                             fi
                         '''
@@ -135,15 +235,15 @@ pipeline {
 
                         SONAR_ID=$(terraform output -raw sonarqube_instance_id)
 
-
                         test -n "${JENKINS_ID}"
                         test -n "${SONAR_ID}"
 
-
+                        echo ""
                         echo "Jenkins Instance ID   : ${JENKINS_ID}"
                         echo "SonarQube Instance ID : ${SONAR_ID}"
 
 
+                        echo ""
                         echo "======================================"
                         echo " DETECT JENKINS EC2"
                         echo "======================================"
@@ -155,6 +255,7 @@ pipeline {
                           --output text)
 
 
+                        echo ""
                         echo "======================================"
                         echo " DETECT SONARQUBE EC2"
                         echo "======================================"
@@ -218,8 +319,8 @@ pipeline {
                           --output text)
 
 
-                        echo "Jenkins SSM Managed : ${JENKINS_SSM_COUNT}"
-                        echo "SonarQube SSM Managed : ${SONAR_SSM_COUNT}"
+                        echo "Jenkins SSM Managed    : ${JENKINS_SSM_COUNT}"
+                        echo "SonarQube SSM Managed  : ${SONAR_SSM_COUNT}"
 
 
                         test "${JENKINS_SSM_COUNT}" -ge 1
@@ -243,6 +344,7 @@ SONARQUBE_PRIVATE_IP=${SONARQUBE_PRIVATE_IP}
 SONARQUBE_PUBLIC_IP=${SONARQUBE_PUBLIC_IP}
 
 EOF_EC2
+
                     '''
                 }
 
@@ -254,9 +356,10 @@ EOF_EC2
                     echo " GENERATE SSM INVENTORY"
                     echo "======================================"
 
-
                     . ./ec2-details.env
 
+
+                    mkdir -p ansible
 
                     cat > ansible/inventory.ini <<EOF_INVENTORY
 
@@ -300,21 +403,29 @@ EOF_INVENTORY
                 sh '''
                     set -e
 
-                    echo "===== INSTALL ANSIBLE COLLECTIONS ====="
+                    echo "======================================"
+                    echo " INSTALL ANSIBLE COLLECTIONS"
+                    echo "======================================"
 
                     ansible-galaxy collection install \
                       -r ansible/requirements.yml \
                       --force
 
 
-                    echo "===== INVENTORY VALIDATION ====="
+                    echo ""
+                    echo "======================================"
+                    echo " INVENTORY VALIDATION"
+                    echo "======================================"
 
                     ansible-inventory \
                       -i ansible/inventory.ini \
                       --graph
 
 
-                    echo "===== ANSIBLE CONFIGURATION ====="
+                    echo ""
+                    echo "======================================"
+                    echo " ANSIBLE CONFIGURATION"
+                    echo "======================================"
 
                     ansible-playbook \
                       -i ansible/inventory.ini \
@@ -335,27 +446,39 @@ EOF_INVENTORY
                 sh '''
                     set -e
 
+                    echo "======================================"
+                    echo " PYTHON ENVIRONMENT"
+                    echo "======================================"
+
                     python3 -m venv .ci-venv
 
                     . .ci-venv/bin/activate
-
 
                     python -m pip install --upgrade pip
 
                     pip install -r requirements.txt
 
 
-                    echo "===== DJANGO CHECK ====="
+                    echo ""
+                    echo "======================================"
+                    echo " DJANGO CHECK"
+                    echo "======================================"
 
                     python manage.py check
 
 
-                    echo "===== DJANGO TESTS ====="
+                    echo ""
+                    echo "======================================"
+                    echo " DJANGO TESTS"
+                    echo "======================================"
 
                     python manage.py test
 
 
-                    echo "===== MIGRATION CHECK ====="
+                    echo ""
+                    echo "======================================"
+                    echo " MIGRATION CHECK"
+                    echo "======================================"
 
                     python manage.py makemigrations \
                       --check \
@@ -421,6 +544,10 @@ EOF_INVENTORY
                     sh '''
                         set -e
 
+                        echo "======================================"
+                        echo " SONARQUBE SCAN"
+                        echo "======================================"
+
                         sonar-scanner \
                           -Dsonar.host.url="${SONAR_HOST_URL}" \
                           -Dsonar.token="${SONAR_TOKEN}"
@@ -440,6 +567,10 @@ EOF_INVENTORY
 
                 sh '''
                     set -e
+
+                    echo "======================================"
+                    echo " TRIVY FILESYSTEM SCAN"
+                    echo "======================================"
 
                     trivy fs \
                       --exit-code 1 \
@@ -462,7 +593,6 @@ EOF_INVENTORY
                 sh '''
                     set -e
 
-
                     ACCOUNT_ID=$(aws sts get-caller-identity \
                       --query Account \
                       --output text)
@@ -471,9 +601,17 @@ EOF_INVENTORY
                     IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
 
-                    echo "Docker Image:"
+                    echo "======================================"
+                    echo " DOCKER IMAGE"
+                    echo "======================================"
+
                     echo "${IMAGE_URI}"
 
+
+                    echo ""
+                    echo "======================================"
+                    echo " DOCKER BUILD"
+                    echo "======================================"
 
                     docker build \
                       --pull \
@@ -498,7 +636,6 @@ EOF_INVENTORY
                 sh '''
                     set -e
 
-
                     ACCOUNT_ID=$(aws sts get-caller-identity \
                       --query Account \
                       --output text)
@@ -506,6 +643,10 @@ EOF_INVENTORY
 
                     IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
+
+                    echo "======================================"
+                    echo " TRIVY IMAGE SCAN"
+                    echo "======================================"
 
                     trivy image \
                       --exit-code 1 \
@@ -528,7 +669,6 @@ EOF_INVENTORY
                 sh '''
                     set -e
 
-
                     ACCOUNT_ID=$(aws sts get-caller-identity \
                       --query Account \
                       --output text)
@@ -539,8 +679,9 @@ EOF_INVENTORY
                     ECR_IMAGE="${ECR_HOST}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
 
-                    echo "===== LOGIN TO ECR ====="
-
+                    echo "======================================"
+                    echo " LOGIN TO ECR"
+                    echo "======================================"
 
                     aws ecr get-login-password \
                       --region "${AWS_REGION}" | \
@@ -549,8 +690,10 @@ EOF_INVENTORY
                       --password-stdin "${ECR_HOST}"
 
 
-                    echo "===== PUSH TO ECR ====="
-
+                    echo ""
+                    echo "======================================"
+                    echo " PUSH TO ECR"
+                    echo "======================================"
 
                     docker push "${ECR_IMAGE}"
                 '''
@@ -567,20 +710,30 @@ EOF_INVENTORY
                     sh '''
                         set -e
 
-
                         ACCOUNT_ID=$(aws sts get-caller-identity \
                           --query Account \
                           --output text)
 
 
-                        ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                        ECR_HOST="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
+                        ECR_IMAGE="${ECR_HOST}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+
+                        echo "======================================"
+                        echo " LOGIN TO DOCKER HUB"
+                        echo "======================================"
 
                         echo "$DOCKER_PASS" | \
                           docker login \
                           --username "$DOCKER_USER" \
                           --password-stdin
 
+
+                        echo ""
+                        echo "======================================"
+                        echo " PUSH VERSIONED DOCKER HUB IMAGE"
+                        echo "======================================"
 
                         docker tag \
                           "${ECR_IMAGE}" \
@@ -590,6 +743,11 @@ EOF_INVENTORY
                         docker push \
                           "${DOCKER_USER}/${DOCKERHUB_REPOSITORY}:${IMAGE_TAG}"
 
+
+                        echo ""
+                        echo "======================================"
+                        echo " PUSH LATEST DOCKER HUB IMAGE"
+                        echo "======================================"
 
                         docker tag \
                           "${ECR_IMAGE}" \
@@ -618,7 +776,6 @@ EOF_INVENTORY
                 sh '''
                     set -e
 
-
                     ACCOUNT_ID=$(aws sts get-caller-identity \
                       --query Account \
                       --output text)
@@ -627,8 +784,9 @@ EOF_INVENTORY
                     ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
 
 
-                    echo "===== UPDATE EKS KUBECONFIG ====="
-
+                    echo "======================================"
+                    echo " UPDATE EKS KUBECONFIG"
+                    echo "======================================"
 
                     aws eks update-kubeconfig \
                       --region "${AWS_REGION}" \
@@ -638,14 +796,26 @@ EOF_INVENTORY
                     kubectl config current-context
 
 
-                    echo "===== HELM LINT ====="
+                    echo ""
+                    echo "======================================"
+                    echo " EKS CONNECTIVITY"
+                    echo "======================================"
 
+                    kubectl get nodes
+
+
+                    echo ""
+                    echo "======================================"
+                    echo " HELM LINT"
+                    echo "======================================"
 
                     helm lint helm/kailash-e-store
 
 
-                    echo "===== HELM TEMPLATE VALIDATION ====="
-
+                    echo ""
+                    echo "======================================"
+                    echo " HELM TEMPLATE VALIDATION"
+                    echo "======================================"
 
                     helm template \
                       kailash-e-store \
@@ -655,8 +825,10 @@ EOF_INVENTORY
                       > /tmp/kailash-e-store-rendered.yaml
 
 
-                    echo "===== HELM DEPLOY ====="
-
+                    echo ""
+                    echo "======================================"
+                    echo " HELM DEPLOY"
+                    echo "======================================"
 
                     helm upgrade --install \
                       kailash-e-store \
@@ -684,28 +856,41 @@ EOF_INVENTORY
                 sh '''
                     set -e
 
-
-                    echo "===== EKS NODES ====="
+                    echo "======================================"
+                    echo " EKS NODES"
+                    echo "======================================"
 
                     kubectl get nodes
 
 
-                    echo "===== ALL PODS ====="
+                    echo ""
+                    echo "======================================"
+                    echo " ALL PODS"
+                    echo "======================================"
 
                     kubectl get pods -A
 
 
-                    echo "===== SERVICES ====="
+                    echo ""
+                    echo "======================================"
+                    echo " SERVICES"
+                    echo "======================================"
 
                     kubectl get svc
 
 
-                    echo "===== HPA ====="
+                    echo ""
+                    echo "======================================"
+                    echo " HPA"
+                    echo "======================================"
 
                     kubectl get hpa
 
 
-                    echo "===== ROLLOUT ====="
+                    echo ""
+                    echo "======================================"
+                    echo " ROLLOUT"
+                    echo "======================================"
 
                     kubectl rollout status \
                       deployment/kailash-e-store-kailash-e-store \
@@ -730,12 +915,18 @@ EOF_INVENTORY
                 sh '''
                     set -e
 
+                    echo "======================================"
+                    echo " PRODUCTION HEALTH CHECK"
+                    echo "======================================"
 
+
+                    echo ""
                     echo "===== ENDPOINTS ====="
 
                     kubectl get endpoints
 
 
+                    echo ""
                     echo "===== APPLICATION PODS ====="
 
                     kubectl get pods \
@@ -743,6 +934,7 @@ EOF_INVENTORY
                       -o wide
 
 
+                    echo ""
                     echo "===== SERVICE ====="
 
                     kubectl get svc \
@@ -750,6 +942,7 @@ EOF_INVENTORY
                       -o wide
 
 
+                    echo ""
                     echo "===== LOAD BALANCER HEALTH ====="
 
 
@@ -795,6 +988,7 @@ EOF_INVENTORY
                     fi
 
 
+                    echo ""
                     echo "Production health check completed successfully."
                 '''
             }
@@ -812,9 +1006,9 @@ EOF_INVENTORY
                 sh '''
                     set -e
 
-
-                    echo "===== PROMETHEUS HELM REPOSITORY ====="
-
+                    echo "======================================"
+                    echo " PROMETHEUS HELM REPOSITORY"
+                    echo "======================================"
 
                     helm repo add prometheus-community \
                       https://prometheus-community.github.io/helm-charts \
@@ -824,8 +1018,10 @@ EOF_INVENTORY
                     helm repo update
 
 
-                    echo "===== MONITORING NAMESPACE ====="
-
+                    echo ""
+                    echo "======================================"
+                    echo " MONITORING NAMESPACE"
+                    echo "======================================"
 
                     kubectl create namespace monitoring \
                       --dry-run=client \
@@ -833,8 +1029,10 @@ EOF_INVENTORY
                       kubectl apply -f -
 
 
-                    echo "===== KUBE PROMETHEUS STACK ====="
-
+                    echo ""
+                    echo "======================================"
+                    echo " KUBE PROMETHEUS STACK"
+                    echo "======================================"
 
                     helm upgrade --install monitoring \
                       prometheus-community/kube-prometheus-stack \
@@ -844,13 +1042,19 @@ EOF_INVENTORY
                       --timeout 10m
 
 
-                    echo "===== MONITORING PODS ====="
+                    echo ""
+                    echo "======================================"
+                    echo " MONITORING PODS"
+                    echo "======================================"
 
                     kubectl get pods \
                       -n monitoring
 
 
-                    echo "===== MONITORING SERVICES ====="
+                    echo ""
+                    echo "======================================"
+                    echo " MONITORING SERVICES"
+                    echo "======================================"
 
                     kubectl get svc \
                       -n monitoring
@@ -874,21 +1078,36 @@ EOF_INVENTORY
 =========================================================
 
 GitLab
-  -> Terraform
-  -> EC2 Auto Detection
-  -> AWS SSM
-  -> Ansible
-  -> Django Tests
-  -> SonarQube
-  -> Trivy Filesystem
-  -> Docker Build
-  -> Trivy Image
-  -> ECR
-  -> Docker Hub
-  -> Helm
-  -> EKS
-  -> Health Check
-  -> Prometheus/Grafana
+   ->
+Terraform + S3 Remote State
+   ->
+EC2 Auto Detection
+   ->
+AWS SSM
+   ->
+Ansible
+   ->
+Django Tests
+   ->
+SonarQube
+   ->
+Trivy Filesystem
+   ->
+Docker Build
+   ->
+Trivy Image
+   ->
+ECR
+   ->
+Docker Hub
+   ->
+Helm
+   ->
+EKS
+   ->
+Health Check
+   ->
+Prometheus/Grafana
 
 =========================================================
 '''
