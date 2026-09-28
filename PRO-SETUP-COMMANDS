@@ -1,0 +1,834 @@
+STEP 1 — Ek temporary Bootstrap EC2 banao
+
+  - Name: kailash-bootstrap
+  - AMI: Ubuntu 24.04 LTS
+  - Instance: t3.medium
+
+  - .pem download karo.
+
+  Is EC2 ka purpose----↓
+
+	Ye production Jenkins nahi hai.
+
+	Ye sirf:
+
+	Bootstrap EC2
+	      ↓
+	Terraform
+	      ↓
+	Complete AWS infrastructure
+	      ↓
+	Jenkins EC2 automatically
+	      ↓
+	SonarQube EC2 automatically
+
+--------------------------------------------------------------------
+
+STEP 2 — Bootstrap EC2 mein software install karo
+
+	aws
+	terraform
+	docker
+	kubectl
+	helm
+	ansible
+	trivy
+	git
+
+	Then:
+
+		- sudo apt update
+		- sudo apt upgrade -y
+ 
+    Install basic packages:
+
+		sudo apt install -y \
+		git \
+		curl \
+		wget \
+		unzip \
+		jq \
+		gnupg \
+		ca-certificates \
+		python3 \
+		python3-pip \
+		python3-venv \
+		software-properties-common
+
+-----------------------------------------------------------------------------
+
+STEP 3 — AWS CLI
+   aws --version
+
+    Agar nahi hai:
+
+		curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+		-o awscliv2.zip
+
+		unzip awscliv2.zip
+
+		sudo ./aws/install
+
+    Check:
+
+		aws --version
+
+	Then:
+
+		aws sts get-caller-identity	
+
+    Important
+
+	  - Bootstrap EC2 ko IAM Role do.
+
+	AWS Console:
+
+		EC2
+		→ Bootstrap EC2
+		→ Security
+		→ Modify IAM Role	
+
+
+    --------------------AWS I M ROLL -------------------
+
+     STEP 1 — IAM User mat banao
+
+		AWS Console mein:
+
+			IAM
+			→ Users
+
+			New user create mat karo.
+
+			Hum directly Role banayenge.
+
+    ----------------------------------------------------------
+	 STEP 2 — IAM → Roles
+
+			AWS Console:
+
+			AWS Console
+			   ↓
+			IAM
+			   ↓
+			Roles
+			   ↓
+			Create role		
+
+    --------------------------------------------------------------
+
+    STEP 3 — Trusted entity
+
+		Screen par:
+
+		Trusted entity type:
+
+		 --AWS service
+
+		 select karo.
+
+		Phir:
+
+		   Use case
+
+		mein:
+
+		   EC2
+
+		select karo.
+
+		Then:
+
+		Next
+		Iska matlab
+
+		  Hum AWS ko keh rahe hain:
+
+		  Ye role kisi IAM User ko nahi, balki EC2 machine ko diya jayega.	
+
+    ----------------------------------------------------------------------
+
+    STEP 4 — Permissions
+
+		Ab AWS permissions ka page aayega.
+
+		Tumhare Terraform ko initial infrastructure create karna hai:
+
+        AdministratorAccess
+
+        --OR--- 
+		
+		VPC
+		EC2
+		IAM
+		EKS
+		RDS
+		ElastiCache
+		S3
+		ECR
+		SSM
+		Security Groups
+
+		Agar tum specifically individual policies hi lagana chahte ho
+
+		Tumhare listed services ke corresponding AWS managed policy names generally ye hain:
+
+		Requirement	AWS Managed Policy
+		EC2	- AmazonEC2FullAccess
+		VPC	- AmazonVPCFullAccess
+		IAM	- IAMFullAccess
+		EKS	- AmazonEKSClusterPolicy / AmazonEKSServicePolicy (EKS permissions are more nuanced)
+		RDS	- AmazonRDSFullAccess
+		ElastiCache	- AmazonElastiCacheFullAccess
+		S3	- AmazonS3FullAccess
+		ECR	- AmazonEC2ContainerRegistryFullAccess
+		SSM	- AmazonSSMFullAccess
+
+		Tumhare current master.tf mein ye resources actually defined hain.
+
+		Abhi lab/bootstrap ke liye simplest option:
+
+		Permissions mein:
+
+		  -- AdministratorAccess
+
+		select kar sakte ho.
+
+			Lekin sirf temporary bootstrap/lab purpose ke liye.
+
+			Production mein hum isko replace karke least-privilege Terraform role banayenge.
+
+	------------------------------------------------------------------------
+	
+	STEP 5 — Role name
+
+		Role name rakho:
+
+		  - TerraformBootstrapRole
+
+		Description:
+
+			Temporary role for Bootstrap EC2 to provision Kailash E-Store AWS infrastructure using Terraform.
+
+		Then:
+
+		  Create role	
+
+	---------------------------------------------------------------------
+
+	 STEP 6 — Ab Bootstrap EC2 par Role attach karo
+
+		Ab:
+
+		EC2
+		→ Instances
+
+		mein jao.
+
+		Apna Bootstrap EC2 select karo.
+
+		Example:
+
+		  kailash-bootstrap
+
+		Then:
+
+		Actions
+			→ Security
+			→ Modify IAM role	
+
+
+    ---------------------------------------------------------------
+
+    STEP 7 — Role select karo
+
+		Dropdown mein:
+
+		 TerraformBootstrapRole
+
+		select karo.
+
+		Then:
+
+		   Update IAM role
+
+		Bas.
+
+	-----------------------------------------------------------------
+
+	  STEP 8 — Verify karo
+
+			Bootstrap EC2 select karo:
+
+				Security
+
+			mein dekho:
+
+			IAM Role
+			  TerraformBootstrapRole
+
+			dikhna chahiye.	
+
+			  aws sts get-caller-identity		  
+
+    -----------------------------------------------------------
+
+
+        then on the terminal with .pem -- 
+
+            Bootstrap EC2 par:
+
+			uname -m
+
+			Agar output:
+
+			   x86_64
+
+			hai, to ye commands chalao:
+
+				sudo apt update
+				sudo apt install -y curl unzip
+
+			Phir AWS CLI v2 download:
+
+				curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+
+			Unzip:
+
+					unzip -q awscliv2.zip
+
+			Install:
+
+					sudo ./aws/install
+
+			Check:
+
+					aws --version
+
+			Expected:
+
+					aws-cli/2.x.x ...
+
+----------------------------------------------------------------------------
+
+STEP 4 — Terraform
+
+	wget -O- https://apt.releases.hashicorp.com/gpg | \
+	gpg --dearmor | \
+	sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null	
+
+
+	echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+    sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+    sudo apt update
+    sudo apt install terraform -y	
+
+
+    Check:
+
+		terraform version
+
+----------------------------------------------------------------------------
+
+STEP 5 — Docker
+
+     sudo apt install -y docker.io
+
+     sudo systemctl enable docker
+	 sudo systemctl start docker
+
+	 Check:
+
+		docker --version
+
+----------------------------------------------------------------------------
+
+STEP 6 — kubectl
+
+      curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+
+      sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+      kubectl version --client
+
+----------------------------------------------------------------------------
+
+STEP 7 — Helm
+
+      curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+
+      Check:
+
+		helm version
+
+-----------------------------------------------------------------------------
+
+STEP 8 — Ansible
+
+      sudo apt install -y ansible
+
+      Check:
+
+			ansible --version
+
+-----------------------------------------------------------------------------
+
+STEP 9 — Trivy
+	  
+	  sudo apt-get install -y wget gnupg
+
+
+	  wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+	  gpg --dearmor | \
+	  sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+
+	  echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
+	  sudo tee /etc/apt/sources.list.d/trivy.list
+
+
+      sudo apt update
+	  sudo apt install -y trivy
+
+	  Check:
+
+			trivy --version
+
+----------------------------------------------------------------------------
+
+STEP 10 — Git
+
+		git --version
+
+		Agar missing:
+
+		   sudo apt install -y git
+
+
+--------------------------------------------------------------------------
+
+STEP 11 — Final check
+
+      Bootstrap EC2 par ye exactly run karo:
+
+       	aws --version
+		terraform version
+		docker --version
+		kubectl version --client
+		helm version
+		ansible --version
+		trivy --version
+		git --version
+
+	  Aur:
+
+		aws sts get-caller-identity
+
+		  Ye sab green hona chahiye.
+
+--------------------------------------------------------------------------
+
+STEP 12 — GitLab repository Bootstrap EC2 par lao
+
+      git clone https://gitlab.com/SOFTAPP-TECHNOLOGIES/kailash-e-store-real-devops-ci-cd-pipeline.git
+
+      cd kailash-e-store-real-devops-ci-cd-pipeline
+
+
+      Check:
+
+		ls
+
+	  Aapko roughly:
+
+		Jenkinsfile
+		Dockerfile
+		terraform/
+		ansible/
+		helm/
+		monitoring/
+		...
+
+		milna chahiye.
+
+----------------------------------------------------------------------------
+
+STEP 13 — Terraform files verify karo
+
+      cd terraform
+
+		Check:
+
+		   ls
+
+		Aapka important:
+
+			master.tf
+			terraform.tfvars.example
+			user-data/
+
+		hona chahiye.
+
+---------------------------------------------------------------------------
+
+STEP 14 — RDS password set karo
+
+	Aapke Terraform mein:
+
+	variable "db_password" {
+	  ...
+	  sensitive = true
+	}
+
+    hai.
+
+	Isliye password GitLab mein nahi hai.
+
+	Bootstrap EC2 par:
+
+	export TF_VAR_db_password='SET OR YOU CAN WRITE YOUR STONG PASSWORD'
+
+	Check:
+
+		ONLY FOR SELF PURPOSE-----> echo $TF_VAR_db_password
+
+		Password kisi screenshot/chat mein mat bhejna.
+
+---------------------------------------------------------------------------
+
+STEP 15 — Terraform Init
+
+		terraform/ directory mein:
+
+		  terraform init
+
+		Then:
+
+		  terraform validate
+
+		Then:
+
+		   terraform plan
+
+		Yahan rukna.
+
+		Plan mein aapko approximately resources dikhne chahiye:
+
+			VPC
+			NAT
+			Jenkins IAM
+			Jenkins EC2
+			SonarQube IAM
+			SonarQube EC2
+			ECR
+			S3
+			RDS
+			Redis
+			EKS
+			EKS nodes
+			Security groups
+
+
+----------------------------------------------------------------------------
+
+STEP 16 — VERY IMPORTANT
+
+		Aapke Terraform mein Jenkins EC2 ka:
+
+		   user_data = file("${path.module}/user-data/jenkins-bootstrap.sh")
+
+		aur SonarQube EC2 ka:
+
+		   user_data = file("${path.module}/user-data/sonarqube-bootstrap.sh")
+
+		already configured hai.
+
+		Isliye Jenkins aur SonarQube manually install karne ki zarurat nahi honi chahiye, provided those two bootstrap scripts actually install/configure everything required.
+
+-----------------------------------------------------------------------------
+
+STEP 17 — First Terraform Apply
+
+	Agar terraform plan correct hai:
+
+	  terraform apply
+
+	Confirm:
+
+		yes
+
+	Terraform automatically create karega:
+
+	                    Terraform
+	                       │
+	       ┌───────────────┼────────────────┐
+	       ↓               ↓                ↓
+	      VPC           Jenkins          SonarQube
+	                       │                │
+	                       ↓                ↓
+	                      ECR              SSM
+	                       │
+	       ┌───────────────┼───────────────┐
+	       ↓               ↓               ↓
+	      EKS             RDS             Redis
+	                       │
+	                       ↓
+	                      S3
+
+
+----------------------------------------------------------------------------
+
+STEP 18 — Terraform outputs
+
+	Apply ke baad:
+
+	terraform output
+
+	  Aapko milenge:
+
+		jenkins_instance_id
+		jenkins_public_ip
+		jenkins_url
+
+		sonarqube_instance_id
+		sonarqube_public_ip
+		sonarqube_url
+
+		ecr_repository_url
+		eks_cluster_name
+		media_bucket
+		rds_endpoint
+		redis_endpoint
+
+	Ye outputs aapke Terraform file mein explicitly defined hain.
+
+------------------------------------------------------------------------------------------
+
+STEP 19 — Jenkins EC2 automatically create hoga
+
+	Ab AWS Console:
+
+	EC2
+	→ Instances
+
+	mein:
+
+		kailash-e-store-prod-jenkins
+
+	jaisa instance milega.
+
+	Ye manually banaya hua Jenkins nahi hai.
+
+	Terraform-created Jenkins hai.
+
+-----------------------------------------------------------------------------------------------
+
+STEP 20 — SonarQube EC2 automatically create hoga
+
+	Similarly:
+
+		kailash-e-store-prod-sonarqube
+
+	milega.
+
+	SonarQube bootstrap script automatically execute hogi.
+
+--------------------------------------------------------------------------------------------------
+
+STEP 21 — Jenkins URL
+
+	Terraform:
+
+	terraform output -raw jenkins_url
+
+	Example:
+
+	  http://PUBLIC-IP:8080
+
+	Browser mein open karo.
+
+
+-----------------------------------------------------------------------------------------------
+
+STEP 22 — SonarQube URL
+
+	terraform output -raw sonarqube_url
+
+	Example:
+
+	  http://PUBLIC-IP:9000
+
+	Browser mein open karo.
+
+
+-------------------------------------------------------------------------------------------------
+
+STEP 23 — Ab Jenkins credentials
+
+	Jenkins mein:
+
+	1. RDS
+
+	ID:
+	  rds-db-password
+	
+	2. Sonar
+	
+	ID:
+	  sonar-token
+	
+	3. Docker Hub
+	
+	ID:
+	  dockerhub-creds
+
+	Ye teen aapke Jenkinsfile mein referenced hain.
+
+
+-----------------------------------------------------------------------------------------------
+
+STEP 24 — Jenkins job
+
+	Jenkins mein:
+
+	New Item
+	      ↓
+	kailash-e-store
+	      ↓
+	Pipeline
+	      ↓
+	Pipeline script from SCM
+	      ↓
+	Git
+
+	Repository:
+
+	https://gitlab.com/SOFTAPP-TECHNOLOGIES/kailash-e-store-real-devops-ci-cd-pipeline.gi
+
+
+-------------------------------------------------------------------------------------------------
+
+STEP 25 — First Jenkins pipeline
+
+	Yahan ek important correction hai.
+
+	Aapke Terraform infrastructure ko abhi hum Bootstrap EC2 se manually terraform apply karwa rahe hain.
+
+	Isliye first Jenkins run mein:
+
+	APPLY_INFRA = false
+
+	rakho.
+
+	Kyun?
+
+	Because infrastructure already Terraform se create ho chuka hoga.
+
+	Then:
+
+	Build with Parameters
+	        ↓
+	APPLY_INFRA = false
+	        ↓
+	BUILD
+
+	Pipeline:
+
+	Checkout
+	 ↓
+	Terraform Plan
+	 ↓
+	EC2 Detect
+	 ↓
+	SSM
+	 ↓
+	Ansible
+	 ↓
+	Test
+	 ↓
+	SonarQube
+	 ↓
+	Trivy
+	 ↓
+	Docker
+	 ↓
+	ECR
+	 ↓
+	Docker Hub
+	 ↓
+	Helm
+	 ↓
+	EKS
+	 ↓
+	Health
+	 ↓
+	Monitoring
+
+
+-------------------------------------------------------------------------------------------------
+STEP 26 — Jenkins mein First Pipeline Run
+
+	Jenkins open karo:
+
+		http://<JENKINS-PUBLIC-IP>:8080
+
+	Jenkins mein:
+
+	Dashboard
+	   ↓
+	Kailash-E-Store Pipeline
+	   ↓
+	Build with Parameters
+
+	Parameter:
+
+		APPLY_INFRA = false
+
+	Then:
+
+		BUILD
+
+------------------------------------------------------------------------------------------------
+
+STEP 27 — Console Output ko stage-by-stage dekho
+
+	Build start hone ke baad Console Output open karo.
+
+	Expected flow:
+
+		1. Checkout
+		       ↓
+		2. Terraform Infrastructure
+		       ↓
+		3. Generate Ansible Inventory / EC2 Detect
+		       ↓
+		4. Ansible Configuration
+		       ↓
+		5. Install & Test
+		       ↓
+		6. SonarQube
+		       ↓
+		7. Trivy Filesystem
+		       ↓
+		8. Docker Build
+		       ↓
+		9. Trivy Image
+		       ↓
+		10. Push ECR + Docker Hub
+		       ↓
+		11. Helm Deploy
+		       ↓
+		12. EKS Verification
+		       ↓
+		13. Health Check
+		       ↓
+		14. Monitoring
+
+	Har stage green hona zaroori nahi ki pehli run mein immediately ho, kyunki pehli run mein environment/configuration issues mil sakte hain. Agar red ho, us stage ka exact error dekhna hai.
+
+
+
+
+
+
