@@ -563,7 +563,7 @@ EOF_EC2
                     ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
                     echo "======================================"
-                    echo " DOCKER IMAGE"
+                    echo " DOCKER IMAGE VERIFICATION"
                     echo "======================================"
 
                     docker image inspect "${ECR_IMAGE}" \
@@ -588,7 +588,7 @@ EOF_EC2
                     -c "import importlib.metadata as m; print('msgpack metadata:', m.version('msgpack')); print('setuptools metadata:', m.version('setuptools'))"
 
                     echo "======================================"
-                    echo " ALL MSGPACK / SETUPTOOLS FILES"
+                    echo " MSGPACK / SETUPTOOLS FILES"
                     echo "======================================"
 
                     docker run --rm \
@@ -608,6 +608,8 @@ EOF_EC2
                 '''
             }
         }
+
+
         // =====================================================
         // 10. PUSH ECR + DOCKER HUB
         // =====================================================
