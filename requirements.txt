@@ -9,3 +9,5 @@ tzdata==2026.4
 requests>=2.31
 PyJWT==2.13.0
 Pillow==12.3.0
+msgpack>=1.2.1
+setuptools>=78.1.1
