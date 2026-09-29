@@ -14,10 +14,14 @@ RUN apt-get update \
 
 COPY requirements.txt .
 
-# Remove vulnerable pre-installed Python package versions
-RUN python -m pip uninstall -y msgpack setuptools || true
+# Remove any old/vulnerable package files and metadata
+RUN find /usr/local/lib/python3.14/site-packages \
+       -maxdepth 1 \
+       \( -name 'msgpack*' -o -name 'setuptools*' \) \
+       -exec rm -rf {} + \
+    && echo "Old msgpack/setuptools files removed"
 
-# Install application dependencies and secure package versions
+# Install dependencies with secure versions
 RUN python -m pip install --upgrade pip \
     && python -m pip install --no-cache-dir -r requirements.txt \
     && python -m pip install --no-cache-dir --upgrade \
