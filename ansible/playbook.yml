@@ -3,6 +3,16 @@
 # ============================================================
 # Jenkins is the controller.
 # EC2 targets are reached using AWS SSM.
+#
+# This playbook:
+# 1. Configures Jenkins CI/CD controller
+# 2. Verifies required CI/CD tools
+# 3. Configures SonarQube server
+#
+# IMPORTANT:
+# Jenkins is NOT restarted by this playbook.
+# Jenkins Docker-group configuration/restart is handled
+# during the Jenkins bootstrap process.
 # ============================================================
 
 
@@ -50,6 +60,9 @@
     # --------------------------------------------------------
     # Docker access for Jenkins
     # --------------------------------------------------------
+    # Do not restart Jenkins here.
+    # Jenkins bootstrap is responsible for applying the
+    # Docker group membership to the Jenkins service.
 
     - name: Ensure Docker group exists
       ansible.builtin.group:
@@ -66,15 +79,30 @@
 
 
     # --------------------------------------------------------
-    # Restart Jenkins so Docker group membership is applied
+    # Verify Jenkins service
     # --------------------------------------------------------
 
-    - name: Restart Jenkins after Docker group update
+    - name: Ensure Jenkins is enabled and running
       ansible.builtin.systemd:
         name: jenkins
         enabled: true
-        state: restarted
-        daemon_reload: true
+        state: started
+
+
+    # --------------------------------------------------------
+    # Verify Docker
+    # --------------------------------------------------------
+
+    - name: Verify Docker is installed
+      ansible.builtin.command:
+        cmd: docker --version
+      register: docker_version
+      changed_when: false
+
+
+    - name: Display Docker version
+      ansible.builtin.debug:
+        msg: "{{ docker_version.stdout }}"
 
 
     # --------------------------------------------------------
@@ -142,14 +170,35 @@
 
 
     # --------------------------------------------------------
-    # Final Jenkins service state
+    # Verify AWS CLI
     # --------------------------------------------------------
 
-    - name: Ensure Jenkins is enabled and running
-      ansible.builtin.systemd:
-        name: jenkins
-        enabled: true
-        state: started
+    - name: Verify AWS CLI is installed
+      ansible.builtin.command:
+        cmd: aws --version
+      register: aws_version
+      changed_when: false
+
+
+    - name: Display AWS CLI version
+      ansible.builtin.debug:
+        msg: "{{ aws_version.stderr if aws_version.stderr else aws_version.stdout }}"
+
+
+    # --------------------------------------------------------
+    # Verify Git
+    # --------------------------------------------------------
+
+    - name: Verify Git is installed
+      ansible.builtin.command:
+        cmd: git --version
+      register: git_version
+      changed_when: false
+
+
+    - name: Display Git version
+      ansible.builtin.debug:
+        msg: "{{ git_version.stdout }}"
 
 
 # ============================================================
@@ -183,6 +232,28 @@
         name: docker
         enabled: true
         state: started
+
+
+    # --------------------------------------------------------
+    # Ensure SonarQube volumes exist
+    # --------------------------------------------------------
+
+    - name: Create SonarQube data volume
+      community.docker.docker_volume:
+        name: sonarqube_data
+        state: present
+
+
+    - name: Create SonarQube logs volume
+      community.docker.docker_volume:
+        name: sonarqube_logs
+        state: present
+
+
+    - name: Create SonarQube extensions volume
+      community.docker.docker_volume:
+        name: sonarqube_extensions
+        state: present
 
 
     # --------------------------------------------------------
