@@ -327,45 +327,39 @@ EOF_EC2
                     echo " ANSIBLE COLLECTIONS"
                     echo "======================================"
 
-
                     /opt/ansible-venv/bin/ansible-galaxy collection install \
-                      -r ansible/requirements.yml \
-                      --force
-
+                    -r ansible/requirements.yml \
+                    --force
 
                     echo "======================================"
                     echo " ANSIBLE INVENTORY"
                     echo "======================================"
 
-
                     . ./ec2-details.env
 
-
                     cat > ansible/inventory.ini <<EOF_INVENTORY
-[jenkins]
-jenkins-host ansible_host=${JENKINS_INSTANCE_ID}
+        [jenkins]
+        jenkins-host ansible_host=${JENKINS_INSTANCE_ID}
 
-[sonarqube]
-sonarqube-host ansible_host=${SONARQUBE_INSTANCE_ID}
+        [sonarqube]
+        sonarqube-host ansible_host=${SONARQUBE_INSTANCE_ID}
 
-[all:vars]
-ansible_connection=amazon.aws.aws_ssm
-ansible_aws_ssm_region=${AWS_REGION}
-ansible_python_interpreter=/usr/bin/python3
-EOF_INVENTORY
-
+        [all:vars]
+        ansible_connection=amazon.aws.aws_ssm
+        ansible_aws_ssm_region=${AWS_REGION}
+        ansible_aws_ssm_bucket_name=kailash-e-store-prod-tfstate-518056141688
+        ansible_python_interpreter=/usr/bin/python3
+        EOF_INVENTORY
 
                     cat ansible/inventory.ini
-
 
                     echo "======================================"
                     echo " ANSIBLE PLAYBOOK"
                     echo "======================================"
 
-
                     /opt/ansible-venv/bin/ansible-playbook \
-                      -i ansible/inventory.ini \
-                      ansible/playbook.yml
+                    -i ansible/inventory.ini \
+                    ansible/playbook.yml
                 '''
             }
         }
