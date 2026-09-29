@@ -11,7 +11,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN python -m pip install --upgrade pip && pip install -r requirements.txt
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install --no-cache-dir -r requirements.txt \
+    && python -m pip install --no-cache-dir \
+       "msgpack>=1.2.1" \
+       "setuptools>=78.1.1"
 
 COPY . .
 
