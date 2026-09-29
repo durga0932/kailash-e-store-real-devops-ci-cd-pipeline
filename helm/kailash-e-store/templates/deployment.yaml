@@ -9,6 +9,10 @@ metadata:
 spec:
   replicas: {{ .Values.replicaCount }}
 
+  revisionHistoryLimit: 5
+
+  progressDeadlineSeconds: 600
+
   selector:
     matchLabels:
       app: {{ include "kailash-e-store.name" . }}
@@ -31,6 +35,7 @@ spec:
         - name: django
 
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
@@ -49,19 +54,23 @@ spec:
             httpGet:
               path: /
               port: http
+              scheme: HTTP
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 5
+            successThreshold: 1
             failureThreshold: 6
 
           livenessProbe:
             httpGet:
               path: /
               port: http
+              scheme: HTTP
             initialDelaySeconds: 45
             periodSeconds: 20
             timeoutSeconds: 5
+            successThreshold: 1
             failureThreshold: 5
 
           resources:
-{{ toYaml .Values.resources | indent 12 }}
+{{ toYaml .Values.resources | nindent 12 }}
