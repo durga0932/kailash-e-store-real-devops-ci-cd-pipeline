@@ -551,37 +551,47 @@ EOF_EC2
         // 9. TRIVY IMAGE
         // =====================================================
 
-        stage('9. Trivy Docker Image Scan') {
+       stage('9. Trivy Docker Image Scan') {
 
-            steps {
+    steps {
 
-                sh '''
-                    set -e
+        sh '''
+            set -e
 
+            ACCOUNT_ID=$(aws sts get-caller-identity \
+              --query Account \
+              --output text)
 
-                    ACCOUNT_ID=$(aws sts get-caller-identity \
-                      --query Account \
-                      --output text)
+            ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
+            echo "======================================"
+            echo " VERIFY LOCAL DOCKER IMAGE"
+            echo "======================================"
 
-                    ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+            docker image inspect "${ECR_IMAGE}" \
+              --format 'Image ID: {{.Id}}'
 
+            echo "======================================"
+            echo " VERIFY PYTHON SECURITY PACKAGES"
+            echo "======================================"
 
-                    echo "======================================"
-                    echo " TRIVY IMAGE SCAN"
-                    echo "======================================"
+            docker run --rm \
+              --entrypoint python \
+              "${ECR_IMAGE}" \
+              -c "import msgpack, setuptools; print('msgpack:', msgpack.__version__); print('setuptools:', setuptools.__version__)"
 
+            echo "======================================"
+            echo " TRIVY IMAGE SCAN"
+            echo "======================================"
 
-                    trivy image \
-                      --exit-code 1 \
-                      --severity HIGH,CRITICAL \
-                      --ignore-unfixed \
-                      "${ECR_IMAGE}"
-                '''
-            }
-        }
-
-
+            trivy image \
+              --exit-code 1 \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              "${ECR_IMAGE}"
+        '''
+    }
+}
         // =====================================================
         // 10. PUSH ECR + DOCKER HUB
         // =====================================================
