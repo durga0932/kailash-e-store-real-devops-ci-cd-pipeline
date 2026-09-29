@@ -551,47 +551,63 @@ EOF_EC2
         // 9. TRIVY IMAGE
         // =====================================================
 
-       stage('9. Trivy Docker Image Scan') {
+            stage('9. Trivy Docker Image Scan') {
+            steps {
+                sh '''
+                    set -e
 
-    steps {
+                    ACCOUNT_ID=$(aws sts get-caller-identity \
+                    --query Account \
+                    --output text)
 
-        sh '''
-            set -e
+                    ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
-            ACCOUNT_ID=$(aws sts get-caller-identity \
-              --query Account \
-              --output text)
+                    echo "======================================"
+                    echo " DOCKER IMAGE"
+                    echo "======================================"
 
-            ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                    docker image inspect "${ECR_IMAGE}" \
+                    --format 'Image ID: {{.Id}}'
 
-            echo "======================================"
-            echo " VERIFY LOCAL DOCKER IMAGE"
-            echo "======================================"
+                    echo "======================================"
+                    echo " PYTHON IMPORT VERSIONS"
+                    echo "======================================"
 
-            docker image inspect "${ECR_IMAGE}" \
-              --format 'Image ID: {{.Id}}'
+                    docker run --rm \
+                    --entrypoint python \
+                    "${ECR_IMAGE}" \
+                    -c "import msgpack,setuptools; print('msgpack:', msgpack.__version__); print('setuptools:', setuptools.__version__)"
 
-            echo "======================================"
-            echo " VERIFY PYTHON SECURITY PACKAGES"
-            echo "======================================"
+                    echo "======================================"
+                    echo " PYTHON PACKAGE METADATA"
+                    echo "======================================"
 
-            docker run --rm \
-              --entrypoint python \
-              "${ECR_IMAGE}" \
-              -c "import msgpack, setuptools; print('msgpack:', msgpack.__version__); print('setuptools:', setuptools.__version__)"
+                    docker run --rm \
+                    --entrypoint python \
+                    "${ECR_IMAGE}" \
+                    -c "import importlib.metadata as m; print('msgpack metadata:', m.version('msgpack')); print('setuptools metadata:', m.version('setuptools'))"
 
-            echo "======================================"
-            echo " TRIVY IMAGE SCAN"
-            echo "======================================"
+                    echo "======================================"
+                    echo " ALL MSGPACK / SETUPTOOLS FILES"
+                    echo "======================================"
 
-            trivy image \
-              --exit-code 1 \
-              --severity HIGH,CRITICAL \
-              --ignore-unfixed \
-              "${ECR_IMAGE}"
-        '''
-    }
-}
+                    docker run --rm \
+                    --entrypoint sh \
+                    "${ECR_IMAGE}" \
+                    -c "find /usr/local/lib/python3.14/site-packages -maxdepth 2 \\( -iname 'msgpack*' -o -iname 'setuptools*' \\) -print"
+
+                    echo "======================================"
+                    echo " TRIVY IMAGE SCAN"
+                    echo "======================================"
+
+                    trivy image \
+                    --exit-code 1 \
+                    --severity HIGH,CRITICAL \
+                    --ignore-unfixed \
+                    "${ECR_IMAGE}"
+                '''
+            }
+        }
         // =====================================================
         // 10. PUSH ECR + DOCKER HUB
         // =====================================================
