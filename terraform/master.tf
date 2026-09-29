@@ -6,6 +6,7 @@
 # ElastiCache Redis and Amazon EKS.
 #
 # Terraform state is stored remotely in S3.
+#
 # Jenkins is the CI/CD + Ansible control node.
 # ============================================================
 
@@ -184,9 +185,8 @@ module "vpc" {
     "10.50.2.0/24"
   ]
 
-  enable_nat_gateway = var.create_nat_gateway
-  single_nat_gateway = true
-
+  enable_nat_gateway   = var.create_nat_gateway
+  single_nat_gateway   = true
   enable_dns_hostnames = true
   enable_dns_support   = true
 
@@ -287,10 +287,13 @@ resource "aws_iam_role_policy_attachment" "jenkins_ssm" {
 # TERRAFORM IAM READ PERMISSIONS
 # ============================================================
 # Required because terraform-aws-modules/eks uses IAM
-# data sources during plan/apply.
+# resources/data during plan/apply.
 #
-# This permanently fixes:
-# iam:GetRole AccessDenied
+# Includes permissions required to:
+# - Read Jenkins inline role policies
+# - Read EKS OIDC provider
+# - Read IAM policies used by EKS encryption
+# ============================================================
 
 resource "aws_iam_role_policy" "jenkins_terraform_iam_read" {
   name = "${local.name}-jenkins-terraform-iam-read"
@@ -305,9 +308,12 @@ resource "aws_iam_role_policy" "jenkins_terraform_iam_read" {
 
         Action = [
           "iam:GetRole",
+          "iam:GetRolePolicy",
           "iam:GetInstanceProfile",
           "iam:ListAttachedRolePolicies",
-          "iam:ListRolePolicies"
+          "iam:ListRolePolicies",
+          "iam:GetOpenIDConnectProvider",
+          "iam:GetPolicy"
         ]
 
         Resource = "*"
@@ -318,7 +324,7 @@ resource "aws_iam_role_policy" "jenkins_terraform_iam_read" {
 
 
 # ============================================================
-# JENKINS INSTANCE PROFILE
+# 3. JENKINS INSTANCE PROFILE
 # ============================================================
 
 resource "aws_iam_instance_profile" "jenkins" {
@@ -328,7 +334,7 @@ resource "aws_iam_instance_profile" "jenkins" {
 
 
 # ============================================================
-# 3. JENKINS SECURITY GROUP
+# 4. JENKINS SECURITY GROUP
 # ============================================================
 
 resource "aws_security_group" "jenkins" {
@@ -341,7 +347,10 @@ resource "aws_security_group" "jenkins" {
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = [var.jenkins_allowed_cidr]
+
+    cidr_blocks = [
+      var.jenkins_allowed_cidr
+    ]
   }
 
   egress {
@@ -356,7 +365,7 @@ resource "aws_security_group" "jenkins" {
 
 
 # ============================================================
-# 4. SONARQUBE IAM
+# 5. SONARQUBE IAM
 # ============================================================
 
 resource "aws_iam_role" "sonarqube" {
@@ -395,7 +404,7 @@ resource "aws_iam_instance_profile" "sonarqube" {
 
 
 # ============================================================
-# 5. SONARQUBE SECURITY GROUP
+# 6. SONARQUBE SECURITY GROUP
 # ============================================================
 
 resource "aws_security_group" "sonarqube" {
@@ -416,7 +425,10 @@ resource "aws_security_group" "sonarqube" {
     from_port   = 9000
     to_port     = 9000
     protocol    = "tcp"
-    cidr_blocks = [var.sonarqube_admin_cidr]
+
+    cidr_blocks = [
+      var.sonarqube_admin_cidr
+    ]
   }
 
   egress {
@@ -431,7 +443,7 @@ resource "aws_security_group" "sonarqube" {
 
 
 # ============================================================
-# 6. JENKINS EC2
+# 7. JENKINS EC2
 # ============================================================
 
 resource "aws_instance" "jenkins" {
@@ -456,7 +468,7 @@ resource "aws_instance" "jenkins" {
 
 
 # ============================================================
-# 7. SONARQUBE EC2
+# 8. SONARQUBE EC2
 # ============================================================
 
 resource "aws_instance" "sonarqube" {
@@ -481,7 +493,7 @@ resource "aws_instance" "sonarqube" {
 
 
 # ============================================================
-# 8. ECR
+# 9. ECR
 # ============================================================
 
 resource "aws_ecr_repository" "app" {
@@ -522,7 +534,7 @@ resource "aws_ecr_lifecycle_policy" "app" {
 
 
 # ============================================================
-# 9. S3 MEDIA BUCKET
+# 10. S3 MEDIA BUCKET
 # ============================================================
 
 resource "aws_s3_bucket" "media" {
@@ -563,7 +575,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "media" {
 
 
 # ============================================================
-# 10. PRIVATE DATA SECURITY GROUP
+# 11. PRIVATE DATA SECURITY GROUP
 # ============================================================
 
 resource "aws_security_group" "data" {
@@ -576,7 +588,10 @@ resource "aws_security_group" "data" {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+
+    cidr_blocks = [
+      var.vpc_cidr
+    ]
   }
 
   ingress {
@@ -584,7 +599,10 @@ resource "aws_security_group" "data" {
     from_port   = 6379
     to_port     = 6379
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+
+    cidr_blocks = [
+      var.vpc_cidr
+    ]
   }
 
   egress {
@@ -599,7 +617,7 @@ resource "aws_security_group" "data" {
 
 
 # ============================================================
-# 11. RDS POSTGRESQL
+# 12. RDS POSTGRESQL
 # ============================================================
 
 resource "aws_db_subnet_group" "postgres" {
@@ -615,7 +633,6 @@ resource "aws_db_instance" "postgres" {
 
   engine         = "postgres"
   engine_version = "17"
-
   instance_class = var.db_instance_class
 
   allocated_storage     = 20
@@ -647,7 +664,7 @@ resource "aws_db_instance" "postgres" {
 
 
 # ============================================================
-# 12. ELASTICACHE REDIS
+# 13. ELASTICACHE REDIS
 # ============================================================
 
 resource "aws_elasticache_subnet_group" "redis" {
@@ -661,8 +678,7 @@ resource "aws_elasticache_replication_group" "redis" {
 
   description = "Kailash E-Store Redis cache"
 
-  engine = "redis"
-
+  engine    = "redis"
   node_type = var.redis_node_type
 
   num_cache_clusters = 2
@@ -676,33 +692,29 @@ resource "aws_elasticache_replication_group" "redis" {
   ]
 
   automatic_failover_enabled = true
-
-  multi_az_enabled = true
+  multi_az_enabled           = true
 
   tags = local.common_tags
 }
 
 
 # ============================================================
-# 13. AMAZON EKS
+# 14. AMAZON EKS
 # ============================================================
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
 
-  name = local.name
-
+  name               = local.name
   kubernetes_version = var.eks_kubernetes_version
 
-  vpc_id = module.vpc.vpc_id
-
+  vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
   endpoint_public_access = true
 
   enable_cluster_creator_admin_permissions = true
-
 
   # ----------------------------------------------------------
   # JENKINS EKS ACCESS
@@ -724,7 +736,6 @@ module "eks" {
     }
   }
 
-
   # ----------------------------------------------------------
   # MANAGED NODE GROUP
   # ----------------------------------------------------------
@@ -735,10 +746,8 @@ module "eks" {
         var.eks_node_instance_type
       ]
 
-      min_size = 2
-
-      max_size = 6
-
+      min_size     = 2
+      max_size     = 6
       desired_size = 2
     }
   }
@@ -748,7 +757,7 @@ module "eks" {
 
 
 # ============================================================
-# 14. OUTPUTS
+# 15. OUTPUTS
 # ============================================================
 # These outputs are consumed by Jenkins and Ansible.
 
