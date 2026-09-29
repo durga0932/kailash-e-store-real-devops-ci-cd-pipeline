@@ -328,7 +328,7 @@ EOF_EC2
                     echo "======================================"
 
 
-                    ansible-galaxy collection install \
+                    /opt/ansible-venv/bin/ansible-galaxy collection install \
                       -r ansible/requirements.yml \
                       --force
 
@@ -363,7 +363,7 @@ EOF_INVENTORY
                     echo "======================================"
 
 
-                    ansible-playbook \
+                    /opt/ansible-venv/bin/ansible-playbook \
                       -i ansible/inventory.ini \
                       ansible/playbook.yml
                 '''
