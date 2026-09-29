@@ -1,4 +1,5 @@
 pipeline {
+
     agent any
 
     options {
@@ -9,15 +10,27 @@ pipeline {
         timeout(time: 60, unit: 'MINUTES')
     }
 
+
+    // =========================================================
+    // PARAMETERS
+    // =========================================================
+
     parameters {
+
         booleanParam(
             name: 'APPLY_INFRA',
             defaultValue: false,
-            description: 'Run Terraform apply. Keep unchecked for plan-only execution.'
+            description: 'Enable only when Terraform infrastructure changes should be applied.'
         )
     }
 
+
+    // =========================================================
+    // ENVIRONMENT
+    // =========================================================
+
     environment {
+
         AWS_REGION = 'ap-south-1'
 
         PROJECT = 'kailash-e-store'
@@ -26,28 +39,34 @@ pipeline {
 
         EKS_CLUSTER = 'kailash-e-store-prod'
 
-        IMAGE_TAG = "${BUILD_NUMBER}"
-
         DOCKERHUB_REPOSITORY = 'kailash-e-store'
+
+        IMAGE_TAG = "${BUILD_NUMBER}"
 
         GITLAB_REPOSITORY =
             'https://gitlab.com/SOFTAPP-TECHNOLOGIES/kailash-e-store-real-devops-ci-cd-pipeline.git'
 
-        AWS_PAGER = ''
-
         TF_IN_AUTOMATION = 'true'
 
         TF_INPUT = 'false'
+
+        AWS_PAGER = ''
     }
 
 
+    // =========================================================
+    // STAGES
+    // =========================================================
+
     stages {
 
-        // =========================================================
-        // 1. CHECKOUT
-        // =========================================================
 
-        stage('1. Checkout') {
+        // =====================================================
+        // 1. CHECKOUT
+        // =====================================================
+
+        stage('1. Checkout Source Code') {
+
             steps {
 
                 checkout scm
@@ -56,24 +75,24 @@ pipeline {
                     set -e
 
                     echo "======================================"
-                    echo " GIT / WORKSPACE"
+                    echo " CHECKOUT SOURCE CODE"
                     echo "======================================"
 
                     git rev-parse --short HEAD
 
-                    git branch --show-current || true
+                    echo "Repository:"
+                    echo "${GITLAB_REPOSITORY}"
 
-                    echo "Repository: ${GITLAB_REPOSITORY}"
-
-                    echo "Build: ${BUILD_NUMBER}"
+                    echo "Build:"
+                    echo "${BUILD_NUMBER}"
                 '''
             }
         }
 
 
-        // =========================================================
-        // 2. TERRAFORM INFRASTRUCTURE
-        // =========================================================
+        // =====================================================
+        // 2. TERRAFORM
+        // =====================================================
 
         stage('2. Terraform Infrastructure') {
 
@@ -133,7 +152,7 @@ pipeline {
                             if [ "${APPLY_INFRA}" = "true" ]; then
 
                                 echo "======================================"
-                                echo " TERRAFORM APPLY ENABLED"
+                                echo " TERRAFORM APPLY"
                                 echo "======================================"
 
                                 terraform apply \
@@ -144,11 +163,9 @@ pipeline {
                             else
 
                                 echo "======================================"
-                                echo " TERRAFORM APPLY SKIPPED"
+                                echo " APPLY_INFRA = FALSE"
+                                echo " Terraform Apply Skipped"
                                 echo "======================================"
-
-                                echo "APPLY_INFRA is false."
-                                echo "Only Terraform plan was executed."
 
                             fi
                         '''
@@ -158,11 +175,11 @@ pipeline {
         }
 
 
-        // =========================================================
-        // 3. EC2 DETECTION + SSM INVENTORY
-        // =========================================================
+        // =====================================================
+        // 3. EC2 DETECTION
+        // =====================================================
 
-        stage('3. EC2 Detect & Generate Ansible Inventory') {
+        stage('3. EC2 Detect & SSM Validation') {
 
             steps {
 
@@ -172,7 +189,7 @@ pipeline {
                         set -e
 
                         echo "======================================"
-                        echo " EC2 INSTANCE AUTO DETECTION"
+                        echo " EC2 INSTANCE DETECTION"
                         echo "======================================"
 
 
@@ -186,13 +203,13 @@ pipeline {
                         test -n "${SONAR_ID}"
 
 
-                        echo "Jenkins Instance ID   : ${JENKINS_ID}"
+                        echo "Jenkins Instance : ${JENKINS_ID}"
 
-                        echo "SonarQube Instance ID : ${SONAR_ID}"
+                        echo "SonarQube Instance : ${SONAR_ID}"
 
 
                         echo "======================================"
-                        echo " DETECT JENKINS EC2"
+                        echo " JENKINS EC2"
                         echo "======================================"
 
 
@@ -203,8 +220,11 @@ pipeline {
                           --output text)
 
 
+                        echo "${JENKINS_INFO}"
+
+
                         echo "======================================"
-                        echo " DETECT SONARQUBE EC2"
+                        echo " SONARQUBE EC2"
                         echo "======================================"
 
 
@@ -213,6 +233,9 @@ pipeline {
                           --instance-ids "${SONAR_ID}" \
                           --query 'Reservations[0].Instances[0].[PrivateIpAddress,PublicIpAddress,State.Name]' \
                           --output text)
+
+
+                        echo "${SONAR_INFO}"
 
 
                         JENKINS_PRIVATE_IP=$(echo "${JENKINS_INFO}" | awk '{print $1}')
@@ -229,38 +252,13 @@ pipeline {
                         SONARQUBE_STATE=$(echo "${SONAR_INFO}" | awk '{print $3}')
 
 
-                        echo ""
-                        echo "========== JENKINS =========="
-
-                        echo "Instance ID : ${JENKINS_ID}"
-
-                        echo "Private IP  : ${JENKINS_PRIVATE_IP}"
-
-                        echo "Public IP   : ${JENKINS_PUBLIC_IP}"
-
-                        echo "State       : ${JENKINS_STATE}"
-
-
-                        echo ""
-                        echo "========== SONARQUBE =========="
-
-                        echo "Instance ID : ${SONAR_ID}"
-
-                        echo "Private IP  : ${SONARQUBE_PRIVATE_IP}"
-
-                        echo "Public IP   : ${SONARQUBE_PUBLIC_IP}"
-
-                        echo "State       : ${SONARQUBE_STATE}"
-
-
                         test "${JENKINS_STATE}" = "running"
 
                         test "${SONARQUBE_STATE}" = "running"
 
 
-                        echo ""
                         echo "======================================"
-                        echo " AWS SSM VALIDATION"
+                        echo " SSM VALIDATION"
                         echo "======================================"
 
 
@@ -278,20 +276,14 @@ pipeline {
                           --output text)
 
 
-                        echo "Jenkins SSM Managed    : ${JENKINS_SSM_COUNT}"
+                        echo "Jenkins SSM: ${JENKINS_SSM_COUNT}"
 
-                        echo "SonarQube SSM Managed  : ${SONAR_SSM_COUNT}"
+                        echo "SonarQube SSM: ${SONAR_SSM_COUNT}"
 
 
                         test "${JENKINS_SSM_COUNT}" -ge 1
 
                         test "${SONAR_SSM_COUNT}" -ge 1
-
-
-                        echo ""
-                        echo "======================================"
-                        echo " EXPORT EC2 INFORMATION"
-                        echo "======================================"
 
 
                         cat > ../ec2-details.env <<EOF_EC2
@@ -311,7 +303,38 @@ EOF_EC2
                     set -e
 
                     echo "======================================"
-                    echo " GENERATE SSM INVENTORY"
+                    echo " EC2 INFORMATION"
+                    echo "======================================"
+
+                    cat ec2-details.env
+                '''
+            }
+        }
+
+
+        // =====================================================
+        // 4. ANSIBLE
+        // =====================================================
+
+        stage('4. Ansible Configuration') {
+
+            steps {
+
+                sh '''
+                    set -e
+
+                    echo "======================================"
+                    echo " ANSIBLE COLLECTIONS"
+                    echo "======================================"
+
+
+                    ansible-galaxy collection install \
+                      -r ansible/requirements.yml \
+                      --force
+
+
+                    echo "======================================"
+                    echo " ANSIBLE INVENTORY"
                     echo "======================================"
 
 
@@ -332,54 +355,11 @@ ansible_python_interpreter=/usr/bin/python3
 EOF_INVENTORY
 
 
-                    echo ""
-                    echo "===== GENERATED INVENTORY ====="
-
                     cat ansible/inventory.ini
 
 
-                    echo ""
-                    echo "===== EC2 DETAILS ====="
-
-                    cat ec2-details.env
-                '''
-            }
-        }
-
-
-        // =========================================================
-        // 4. ANSIBLE CONFIGURATION
-        // =========================================================
-
-        stage('4. Ansible Configuration') {
-
-            steps {
-
-                sh '''
-                    set -e
-
                     echo "======================================"
-                    echo " INSTALL ANSIBLE COLLECTIONS"
-                    echo "======================================"
-
-
-                    ansible-galaxy collection install \
-                      -r ansible/requirements.yml \
-                      --force
-
-
-                    echo "======================================"
-                    echo " INVENTORY VALIDATION"
-                    echo "======================================"
-
-
-                    ansible-inventory \
-                      -i ansible/inventory.ini \
-                      --graph
-
-
-                    echo "======================================"
-                    echo " ANSIBLE CONFIGURATION"
+                    echo " ANSIBLE PLAYBOOK"
                     echo "======================================"
 
 
@@ -391,20 +371,19 @@ EOF_INVENTORY
         }
 
 
-        // =========================================================
-        // 5. APPLICATION TEST
-        // =========================================================
+        // =====================================================
+        // 5. DJANGO VALIDATION
+        // =====================================================
 
-        stage('5. Install & Test') {
+        stage('5. Django Project Validation') {
 
             steps {
 
                 sh '''
                     set -e
 
-
                     echo "======================================"
-                    echo " PYTHON ENVIRONMENT"
+                    echo " DJANGO VALIDATION"
                     echo "======================================"
 
 
@@ -415,29 +394,21 @@ EOF_INVENTORY
 
                     python -m pip install --upgrade pip
 
+
                     pip install -r requirements.txt
 
 
-                    echo "======================================"
-                    echo " DJANGO CHECK"
-                    echo "======================================"
-
+                    echo "===== DJANGO CHECK ====="
 
                     python manage.py check
 
 
-                    echo "======================================"
-                    echo " DJANGO TESTS"
-                    echo "======================================"
-
+                    echo "===== DJANGO TEST ====="
 
                     python manage.py test
 
 
-                    echo "======================================"
-                    echo " MIGRATION CHECK"
-                    echo "======================================"
-
+                    echo "===== MIGRATION CHECK ====="
 
                     python manage.py makemigrations \
                       --check \
@@ -447,11 +418,11 @@ EOF_INVENTORY
         }
 
 
-        // =========================================================
+        // =====================================================
         // 6. SONARQUBE
-        // =========================================================
+        // =====================================================
 
-        stage('6. SonarQube Analysis') {
+        stage('6. SonarQube Code Analysis') {
 
             steps {
 
@@ -489,7 +460,7 @@ EOF_INVENTORY
                     }
 
 
-                    echo "SonarQube URL: ${env.SONAR_HOST_URL}"
+                    echo "SonarQube: ${env.SONAR_HOST_URL}"
                 }
 
 
@@ -502,7 +473,6 @@ EOF_INVENTORY
 
                     sh '''
                         set -e
-
 
                         echo "======================================"
                         echo " SONARQUBE ANALYSIS"
@@ -518,9 +488,9 @@ EOF_INVENTORY
         }
 
 
-        // =========================================================
+        // =====================================================
         // 7. TRIVY FILESYSTEM
-        // =========================================================
+        // =====================================================
 
         stage('7. Trivy Filesystem Scan') {
 
@@ -528,7 +498,6 @@ EOF_INVENTORY
 
                 sh '''
                     set -e
-
 
                     echo "======================================"
                     echo " TRIVY FILESYSTEM SCAN"
@@ -545,9 +514,9 @@ EOF_INVENTORY
         }
 
 
-        // =========================================================
+        // =====================================================
         // 8. DOCKER BUILD
-        // =========================================================
+        // =====================================================
 
         stage('8. Docker Build') {
 
@@ -562,38 +531,33 @@ EOF_INVENTORY
                       --output text)
 
 
-                    IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
-
-
-                    echo "======================================"
-                    echo " DOCKER IMAGE"
-                    echo "======================================"
-
-                    echo "${IMAGE_URI}"
+                    ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
 
                     echo "======================================"
                     echo " DOCKER BUILD"
                     echo "======================================"
 
+                    echo "Image: ${ECR_IMAGE}"
+
 
                     docker build \
                       --pull \
-                      -t "${IMAGE_URI}" \
+                      -t "${ECR_IMAGE}" \
                       .
 
 
-                    docker image inspect "${IMAGE_URI}" >/dev/null
+                    docker image inspect "${ECR_IMAGE}" >/dev/null
                 '''
             }
         }
 
 
-        // =========================================================
+        // =====================================================
         // 9. TRIVY IMAGE
-        // =========================================================
+        // =====================================================
 
-        stage('9. Trivy Image Scan') {
+        stage('9. Trivy Docker Image Scan') {
 
             steps {
 
@@ -606,7 +570,7 @@ EOF_INVENTORY
                       --output text)
 
 
-                    IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                    ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
 
                     echo "======================================"
@@ -618,17 +582,17 @@ EOF_INVENTORY
                       --exit-code 1 \
                       --severity HIGH,CRITICAL \
                       --ignore-unfixed \
-                      "${IMAGE_URI}"
+                      "${ECR_IMAGE}"
                 '''
             }
         }
 
 
-        // =========================================================
-        // 10. ECR + DOCKER HUB
-        // =========================================================
+        // =====================================================
+        // 10. PUSH ECR + DOCKER HUB
+        // =====================================================
 
-        stage('10. Push Image - ECR + Docker Hub Mirror') {
+        stage('10. Push Docker Image') {
 
             steps {
 
@@ -647,7 +611,7 @@ EOF_INVENTORY
 
 
                     echo "======================================"
-                    echo " LOGIN TO ECR"
+                    echo " ECR LOGIN"
                     echo "======================================"
 
 
@@ -659,7 +623,7 @@ EOF_INVENTORY
 
 
                     echo "======================================"
-                    echo " PUSH TO ECR"
+                    echo " PUSH ECR"
                     echo "======================================"
 
 
@@ -684,18 +648,25 @@ EOF_INVENTORY
                           --output text)
 
 
-                        ECR_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                        ECR_HOST="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+                        ECR_IMAGE="${ECR_HOST}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
 
                         echo "======================================"
-                        echo " LOGIN TO DOCKER HUB"
+                        echo " DOCKER HUB LOGIN"
                         echo "======================================"
 
 
-                        echo "$DOCKER_PASS" | \
+                        echo "${DOCKER_PASS}" | \
                           docker login \
-                          --username "$DOCKER_USER" \
+                          --username "${DOCKER_USER}" \
                           --password-stdin
+
+
+                        echo "======================================"
+                        echo " DOCKER HUB PUSH"
+                        echo "======================================"
 
 
                         docker tag \
@@ -723,9 +694,9 @@ EOF_INVENTORY
         }
 
 
-        // =========================================================
-        // 11. HELM -> EKS
-        // =========================================================
+        // =====================================================
+        // 11. EKS + HELM DEPLOY
+        // =====================================================
 
         stage('11. Helm Deploy to EKS') {
 
@@ -765,7 +736,7 @@ EOF_INVENTORY
 
 
                     echo "======================================"
-                    echo " HELM TEMPLATE VALIDATION"
+                    echo " HELM TEMPLATE"
                     echo "======================================"
 
 
@@ -797,11 +768,11 @@ EOF_INVENTORY
         }
 
 
-        // =========================================================
-        // 12. EKS VERIFICATION
-        // =========================================================
+        // =====================================================
+        // 12. KUBERNETES VERIFICATION
+        // =====================================================
 
-        stage('12. EKS Verification') {
+        stage('12. Verify Kubernetes Deployment') {
 
             steps {
 
@@ -810,7 +781,7 @@ EOF_INVENTORY
 
 
                     echo "======================================"
-                    echo " EKS NODES"
+                    echo " KUBERNETES NODES"
                     echo "======================================"
 
 
@@ -818,7 +789,7 @@ EOF_INVENTORY
 
 
                     echo "======================================"
-                    echo " ALL PODS"
+                    echo " PODS"
                     echo "======================================"
 
 
@@ -839,30 +810,16 @@ EOF_INVENTORY
 
 
                     kubectl get hpa
-
-
-                    echo "======================================"
-                    echo " ROLLOUT"
-                    echo "======================================"
-
-
-                    kubectl rollout status \
-                      deployment/kailash-e-store-kailash-e-store \
-                      --timeout=300s
-
-
-                    kubectl get deployment \
-                      kailash-e-store-kailash-e-store
                 '''
             }
         }
 
 
-        // =========================================================
-        // 13. PRODUCTION HEALTH CHECK
-        // =========================================================
+        // =====================================================
+        // 13. ROLLOUT STATUS
+        // =====================================================
 
-        stage('13. Production Health Check') {
+        stage('13. Rollout Status Check') {
 
             steps {
 
@@ -871,36 +828,38 @@ EOF_INVENTORY
 
 
                     echo "======================================"
-                    echo " ENDPOINTS"
+                    echo " ROLLOUT STATUS"
                     echo "======================================"
 
 
-                    kubectl get endpoints
+                    kubectl rollout status \
+                      deployment/kailash-e-store-kailash-e-store \
+                      --timeout=300s
+                '''
+            }
+        }
+
+
+        // =====================================================
+        // 14. APPLICATION HEALTH
+        // =====================================================
+
+        stage('14. Application Health Check') {
+
+            steps {
+
+                sh '''
+                    set -e
 
 
                     echo "======================================"
-                    echo " APPLICATION PODS"
-                    echo "======================================"
-
-
-                    kubectl get pods \
-                      -l app=kailash-e-store \
-                      -o wide
-
-
-                    echo "======================================"
-                    echo " SERVICE"
+                    echo " APPLICATION SERVICE"
                     echo "======================================"
 
 
                     kubectl get svc \
                       kailash-e-store-kailash-e-store \
                       -o wide
-
-
-                    echo "======================================"
-                    echo " LOAD BALANCER HEALTH"
-                    echo "======================================"
 
 
                     SERVICE_IP=$(kubectl get svc \
@@ -919,7 +878,6 @@ EOF_INVENTORY
 
                         echo "LoadBalancer IP: ${SERVICE_IP}"
 
-
                         curl -fsS \
                           --max-time 20 \
                           "http://${SERVICE_IP}/" \
@@ -930,7 +888,6 @@ EOF_INVENTORY
 
                         echo "LoadBalancer Hostname: ${SERVICE_HOSTNAME}"
 
-
                         curl -fsS \
                           --max-time 20 \
                           "http://${SERVICE_HOSTNAME}/" \
@@ -939,29 +896,27 @@ EOF_INVENTORY
 
                     else
 
-                        echo "LoadBalancer address is not available yet."
-
+                        echo "LoadBalancer address not available."
 
                         kubectl describe svc \
                           kailash-e-store-kailash-e-store
-
 
                         exit 1
 
                     fi
 
 
-                    echo "Production health check completed successfully."
+                    echo "Application health check successful."
                 '''
             }
         }
 
 
-        // =========================================================
-        // 14. MONITORING
-        // =========================================================
+        // =====================================================
+        // 15. PROMETHEUS / GRAFANA
+        // =====================================================
 
-        stage('14. Monitoring Stack') {
+        stage('15. Monitoring Verification') {
 
             steps {
 
@@ -970,44 +925,7 @@ EOF_INVENTORY
 
 
                     echo "======================================"
-                    echo " PROMETHEUS HELM REPOSITORY"
-                    echo "======================================"
-
-
-                    helm repo add prometheus-community \
-                      https://prometheus-community.github.io/helm-charts \
-                      || true
-
-
-                    helm repo update
-
-
-                    echo "======================================"
-                    echo " MONITORING NAMESPACE"
-                    echo "======================================"
-
-
-                    kubectl create namespace monitoring \
-                      --dry-run=client \
-                      -o yaml | \
-                      kubectl apply -f -
-
-
-                    echo "======================================"
-                    echo " KUBE PROMETHEUS STACK"
-                    echo "======================================"
-
-
-                    helm upgrade --install monitoring \
-                      prometheus-community/kube-prometheus-stack \
-                      --namespace monitoring \
-                      -f monitoring/kube-prometheus-stack-values.yaml \
-                      --wait \
-                      --timeout 10m
-
-
-                    echo "======================================"
-                    echo " MONITORING PODS"
+                    echo " MONITORING"
                     echo "======================================"
 
 
@@ -1015,22 +933,27 @@ EOF_INVENTORY
                       -n monitoring
 
 
+                    kubectl get svc \
+                      -n monitoring
+
+
                     echo "======================================"
-                    echo " MONITORING SERVICES"
+                    echo " PROMETHEUS / GRAFANA SERVICES"
                     echo "======================================"
 
 
                     kubectl get svc \
-                      -n monitoring
+                      -n monitoring \
+                      | grep -E "prometheus|grafana" || true
                 '''
             }
         }
     }
 
 
-    // =============================================================
+    // =========================================================
     // POST ACTIONS
-    // =============================================================
+    // =========================================================
 
     post {
 
@@ -1042,22 +965,32 @@ EOF_INVENTORY
 =========================================================
 
 GitLab
-  -> Terraform
-  -> S3 Remote State
-  -> EC2 Auto Detection
-  -> AWS SSM
-  -> Ansible
-  -> Django Tests
-  -> SonarQube
-  -> Trivy Filesystem
-  -> Docker Build
-  -> Trivy Image
-  -> ECR
-  -> Docker Hub
-  -> Helm
-  -> EKS
-  -> Health Check
-  -> Prometheus/Grafana
+   ↓
+Terraform
+   ↓
+S3 Remote State
+   ↓
+Ansible / AWS SSM
+   ↓
+Django Validation
+   ↓
+SonarQube
+   ↓
+Trivy
+   ↓
+Docker
+   ↓
+ECR
+   ↓
+Docker Hub
+   ↓
+Helm
+   ↓
+EKS
+   ↓
+Health Check
+   ↓
+Monitoring
 
 =========================================================
 '''
@@ -1071,7 +1004,21 @@ GitLab
  KAILASH E-STORE PIPELINE FAILED
 =========================================================
 
-Check the failed Jenkins stage and console output.
+Check the failed stage and Jenkins Console Output.
+
+=========================================================
+'''
+        }
+
+
+        aborted {
+
+            echo '''
+=========================================================
+ KAILASH E-STORE PIPELINE ABORTED
+=========================================================
+
+The Jenkins build was aborted before completion.
 
 =========================================================
 '''
@@ -1080,25 +1027,15 @@ Check the failed Jenkins stage and console output.
 
         always {
 
-            echo "Build Number : ${BUILD_NUMBER}"
+            echo "======================================"
 
-            echo "GitLab Repository : ${GITLAB_REPOSITORY}"
+            echo " BUILD INFORMATION"
 
+            echo "======================================"
 
-            sh '''
-                echo "===== FINAL EC2 DETAILS ====="
+            echo "Build Number : ${env.BUILD_NUMBER}"
 
-
-                if [ -f ec2-details.env ]; then
-
-                    cat ec2-details.env
-
-                else
-
-                    echo "EC2 details were not generated."
-
-                fi
-            '''
+            echo "Build Result : ${currentBuild.currentResult}"
         }
     }
 }
