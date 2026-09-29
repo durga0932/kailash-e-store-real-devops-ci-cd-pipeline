@@ -16,7 +16,8 @@ RUN python -m pip install --upgrade pip \
     && python -m pip install --no-cache-dir -r requirements.txt \
     && python -m pip install --no-cache-dir \
        "msgpack>=1.2.1" \
-       "setuptools>=78.1.1"
+       "setuptools>=78.1.1" \
+    && python -m pip show msgpack setuptools
 
 COPY . .
 
