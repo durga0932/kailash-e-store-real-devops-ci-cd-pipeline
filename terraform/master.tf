@@ -71,12 +71,12 @@ variable "vpc_cidr" {
 
 variable "jenkins_instance_type" {
   type    = string
-  default = "t3.medium"
+  default = "c7i-flex.large"
 }
 
 variable "sonarqube_instance_type" {
   type    = string
-  default = "t3.medium"
+  default = "c7i-flex.large"
 }
 
 variable "db_instance_class" {
@@ -129,7 +129,7 @@ variable "eks_kubernetes_version" {
 
 variable "eks_node_instance_type" {
   type    = string
-  default = "t3.medium"
+  default = "c7i-flex.large"
 }
 
 
