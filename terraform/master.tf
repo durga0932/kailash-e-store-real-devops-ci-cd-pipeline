@@ -26,7 +26,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "kailash-e-store-prod-tfstate-518056141688"
+    bucket       = "kailash-e-store-prod-tfstate-518"
     key          = "kailash-e-store/terraform.tfstate"
     region       = "ap-south-1"
     encrypt      = true
